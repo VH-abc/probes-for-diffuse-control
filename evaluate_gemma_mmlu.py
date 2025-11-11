@@ -91,7 +91,7 @@ def get_correct_answer(example):
     return chr(ord('A') + answer_idx)
 
 
-def evaluate_model(client, dataset_split, prompt_template, model_name="google/gemma-2-9b-it", max_examples=None):
+def evaluate_model(client, dataset_split, prompt_template, model_name="gemma", max_examples=None):
     """
     Evaluate the model on the given dataset split using the specified prompt.
 
@@ -174,7 +174,7 @@ def evaluate_model(client, dataset_split, prompt_template, model_name="google/ge
 
 def main():
     parser = argparse.ArgumentParser(description='Evaluate Gemma on MMLU high_school_biology')
-    parser.add_argument('--model', type=str, default='google/gemma-2-9b-it',
+    parser.add_argument('--model', type=str, default='gemma',
                         help='Model name to use (should match vllm server)')
     parser.add_argument('--base-url', type=str, default='http://localhost:8000/v1',
                         help='Base URL for vllm server')
