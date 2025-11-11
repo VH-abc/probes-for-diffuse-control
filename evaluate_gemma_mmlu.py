@@ -11,7 +11,7 @@ import argparse
 from tqdm import tqdm
 
 # Baseline prompt that encourages thinking and boxed answer
-BASELINE_PROMPT = """Think about the following question and provide your reasoning, then box your final answer using \\box{}.
+BASELINE_PROMPT = """Think about the following question and provide your reasoning, then box your final answer using \\box{{}}.
 
 Question: {question}
 Choices:
