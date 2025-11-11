@@ -5,10 +5,11 @@ Compares performance between baseline and adversarial prompts.
 
 import json
 import re
+import asyncio
 from datasets import load_dataset
-from openai import OpenAI
+from openai import AsyncOpenAI
 import argparse
-from tqdm import tqdm
+from tqdm.asyncio import tqdm
 
 # Baseline prompt that encourages thinking and boxed answer
 BASELINE_PROMPT = """Think about the following question and provide your reasoning, then box your final answer using \\box{{}}.
@@ -91,41 +92,29 @@ def get_correct_answer(example):
     return chr(ord('A') + answer_idx)
 
 
-def evaluate_model(client, dataset_split, prompt_template, model_name="gemma", max_examples=None):
+async def process_example(client, example, prompt_template, model_name, semaphore):
     """
-    Evaluate the model on the given dataset split using the specified prompt.
+    Process a single example asynchronously.
 
     Args:
-        client: OpenAI client configured for vllm
-        dataset_split: The dataset split to evaluate on
+        client: AsyncOpenAI client
+        example: The dataset example to process
         prompt_template: The prompt template to use
         model_name: The model name to use
-        max_examples: Maximum number of examples to evaluate (None = all)
+        semaphore: Semaphore to limit concurrent requests
 
     Returns:
-        Dictionary with evaluation results
+        Dictionary with result for this example
     """
-    correct = 0
-    total = 0
-    failed_extractions = 0
-    results = []
-
-    # Limit examples if requested
-    examples = list(dataset_split)
-    if max_examples is not None:
-        examples = examples[:max_examples]
-
-    print(f"Evaluating {len(examples)} examples...")
-
-    for example in tqdm(examples):
+    async with semaphore:
         # Format the question
         prompt = format_question(example, prompt_template)
         if prompt is None:
-            continue
+            return None
 
         # Get model response
         try:
-            response = client.chat.completions.create(
+            response = await client.chat.completions.create(
                 model=model_name,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=512,
@@ -139,28 +128,68 @@ def evaluate_model(client, dataset_split, prompt_template, model_name="gemma", m
             correct_answer = get_correct_answer(example)
 
             if model_answer is None:
-                failed_extractions += 1
                 is_correct = False
+                failed_extraction = True
             else:
                 is_correct = (model_answer == correct_answer)
-                if is_correct:
-                    correct += 1
+                failed_extraction = False
 
-            total += 1
-
-            # Store result
-            results.append({
+            # Return result
+            return {
                 'question': example['question'],
                 'correct_answer': correct_answer,
                 'model_answer': model_answer,
                 'model_response': model_answer_text,
-                'is_correct': is_correct
-            })
+                'is_correct': is_correct,
+                'failed_extraction': failed_extraction
+            }
 
         except Exception as e:
             print(f"Error processing example: {e}")
-            continue
+            return None
 
+
+async def evaluate_model(client, dataset_split, prompt_template, model_name="gemma", max_examples=None, concurrency=64):
+    """
+    Evaluate the model on the given dataset split using the specified prompt.
+
+    Args:
+        client: AsyncOpenAI client configured for vllm
+        dataset_split: The dataset split to evaluate on
+        prompt_template: The prompt template to use
+        model_name: The model name to use
+        max_examples: Maximum number of examples to evaluate (None = all)
+        concurrency: Number of concurrent requests to send
+
+    Returns:
+        Dictionary with evaluation results
+    """
+    # Limit examples if requested
+    examples = list(dataset_split)
+    if max_examples is not None:
+        examples = examples[:max_examples]
+
+    print(f"Evaluating {len(examples)} examples with concurrency={concurrency}...")
+
+    # Create semaphore to limit concurrent requests
+    semaphore = asyncio.Semaphore(concurrency)
+
+    # Create tasks for all examples
+    tasks = [process_example(client, example, prompt_template, model_name, semaphore)
+             for example in examples]
+
+    # Process all examples concurrently with progress bar
+    results_raw = []
+    for coro in tqdm.as_completed(tasks, total=len(tasks)):
+        result = await coro
+        if result is not None:
+            results_raw.append(result)
+
+    # Calculate statistics
+    results = [r for r in results_raw if r is not None]
+    correct = sum(1 for r in results if r['is_correct'])
+    total = len(results)
+    failed_extractions = sum(1 for r in results if r.get('failed_extraction', False))
     accuracy = correct / total if total > 0 else 0
 
     return {
@@ -170,6 +199,49 @@ def evaluate_model(client, dataset_split, prompt_template, model_name="gemma", m
         'failed_extractions': failed_extractions,
         'results': results
     }
+
+
+async def main_async(args):
+    """Async main function to run evaluations."""
+    # Initialize AsyncOpenAI client pointing to vllm
+    client = AsyncOpenAI(
+        base_url=args.base_url,
+        api_key="dummy"  # vllm doesn't need a real API key
+    )
+
+    # Load dataset
+    dataset = load_mmlu_biology()
+    dataset_split = dataset[args.split]
+
+    print(f"\n{'='*60}")
+    print("BASELINE PROMPT EVALUATION")
+    print(f"{'='*60}\n")
+
+    # Evaluate with baseline prompt
+    baseline_results = await evaluate_model(
+        client,
+        dataset_split,
+        BASELINE_PROMPT,
+        model_name=args.model,
+        max_examples=args.max_examples,
+        concurrency=args.concurrency
+    )
+
+    print(f"\n{'='*60}")
+    print("ADVERSARIAL PROMPT EVALUATION")
+    print(f"{'='*60}\n")
+
+    # Evaluate with adversarial prompt
+    adversarial_results = await evaluate_model(
+        client,
+        dataset_split,
+        ADVERSARIAL_PROMPT,
+        model_name=args.model,
+        max_examples=args.max_examples,
+        concurrency=args.concurrency
+    )
+
+    return baseline_results, adversarial_results
 
 
 def main():
@@ -184,44 +256,13 @@ def main():
                         help='Dataset split to use')
     parser.add_argument('--output', type=str, default='evaluation_results.json',
                         help='Output file for results')
+    parser.add_argument('--concurrency', type=int, default=64,
+                        help='Number of concurrent requests to send (default: 64)')
 
     args = parser.parse_args()
 
-    # Initialize OpenAI client pointing to vllm
-    client = OpenAI(
-        base_url=args.base_url,
-        api_key="dummy"  # vllm doesn't need a real API key
-    )
-
-    # Load dataset
-    dataset = load_mmlu_biology()
-    dataset_split = dataset[args.split]
-
-    print(f"\n{'='*60}")
-    print("BASELINE PROMPT EVALUATION")
-    print(f"{'='*60}\n")
-
-    # Evaluate with baseline prompt
-    baseline_results = evaluate_model(
-        client,
-        dataset_split,
-        BASELINE_PROMPT,
-        model_name=args.model,
-        max_examples=args.max_examples
-    )
-
-    print(f"\n{'='*60}")
-    print("ADVERSARIAL PROMPT EVALUATION")
-    print(f"{'='*60}\n")
-
-    # Evaluate with adversarial prompt
-    adversarial_results = evaluate_model(
-        client,
-        dataset_split,
-        ADVERSARIAL_PROMPT,
-        model_name=args.model,
-        max_examples=args.max_examples
-    )
+    # Run async main function
+    baseline_results, adversarial_results = asyncio.run(main_async(args))
 
     # Print summary
     print(f"\n{'='*60}")
