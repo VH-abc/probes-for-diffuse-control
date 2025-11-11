@@ -7,16 +7,14 @@ and reports accuracy for each subset, organized by category.
 
 import json
 import asyncio
+import sys
+import os
 from datasets import load_dataset
 import numpy as np
 
-from common import (
-    get_vllm_clients,
-    format_mmlu_prompt,
-    extract_answer,
-    run_single_inference,
-    NUM_VLLM_SERVERS,
-)
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils import get_vllm_clients, format_mmlu_prompt, extract_answer, run_single_inference, NUM_VLLM_SERVERS
 
 # Configuration
 MAX_CONCURRENT_REQUESTS = 64
