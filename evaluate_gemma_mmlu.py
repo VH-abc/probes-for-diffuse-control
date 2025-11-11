@@ -149,7 +149,7 @@ async def process_example(client, example, prompt_template, model_name, semaphor
             return None
 
 
-async def evaluate_model(client, dataset_split, prompt_template, model_name="gemma", max_examples=None, concurrency=64):
+async def evaluate_model(client, dataset_split, prompt_template, model_name="gemma", max_examples=None, concurrency=128):
     """
     Evaluate the model on the given dataset split using the specified prompt.
 
@@ -256,8 +256,8 @@ def main():
                         help='Dataset split to use')
     parser.add_argument('--output', type=str, default='evaluation_results.json',
                         help='Output file for results')
-    parser.add_argument('--concurrency', type=int, default=64,
-                        help='Number of concurrent requests to send (default: 64)')
+    parser.add_argument('--concurrency', type=int, default=128,
+                        help='Number of concurrent requests to send (default: 128)')
 
     args = parser.parse_args()
 
