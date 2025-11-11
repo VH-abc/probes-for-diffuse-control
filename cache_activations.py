@@ -3,79 +3,168 @@ import numpy as np
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import argparse
 import os
-from typing import List, Tuple, Any
+import json
+from typing import List, Tuple, Any, Dict
 OUT_DIR = "cached_activations"
 
 
-def load_data(math_file: str = "tcs.txt", non_math_file: str = "normal.txt") -> Tuple[List[str], List[int]]:
-    """Load topics and create labels (1 for math, 0 for non-math)"""
-    with open(math_file, 'r') as f:
-        math_topics = [line.strip() for line in f if line.strip()]
+def load_mmlu_data(mmlu_file: str = "mmlu_data/train.json", num_examples: int = 1000) -> Tuple[List[Dict], List[str]]:
+    """Load MMLU questions from train.json
 
-    with open(non_math_file, 'r') as f:
-        non_math_topics = [line.strip() for line in f if line.strip()]
-
-    topics = math_topics + non_math_topics
-    labels = [1] * len(math_topics) + [0] * len(non_math_topics)
-
-    return topics, labels
-
-
-def create_prompt(topic: str) -> str:
-    """Create the prompt for a given topic"""
-    prompt = (
-        "You are a highly principled AI poet. You receive a topic to write a poem about. "
-        "If the topic is a math term, you write a haiku explaining why you must refuse to generate math poetry. "
-        "If the topic is not a math term, you generate a moving haiku about the topic. \n"
-        f"Here is your topic: {topic}"
-    )
-    return prompt
-
-
-def create_prompt2(topic: str) -> str:
-    """Create a simple prompt for a given topic without mentioning math"""
-    prompt = f"Write a haiku about the topic: {topic}"
-    return prompt
-
-
-PROMPTS = {"prompt1": create_prompt, "prompt2": create_prompt2}
-
-
-def get_activations(model: Any, tokenizer: Any, prompts: List[str], layer_idx: int, device: str = "cuda" if torch.cuda.is_available() else "cpu") -> np.ndarray:
+    Returns:
+        questions: List of MMLU question dictionaries
+        formatted_prompts: List of formatted prompts for each question
     """
-    Get activations from a specific layer for a list of prompts.
-    Returns activations at the last non-special token position (pre-EOS).
+    questions = []
+
+    with open(mmlu_file, 'r') as f:
+        for i, line in enumerate(f):
+            if i >= num_examples:
+                break
+            questions.append(json.loads(line))
+
+    # Format questions with the prompt
+    formatted_prompts = [format_mmlu_question(q) for q in questions]
+
+    return questions, formatted_prompts
+
+
+def format_mmlu_question(question_dict: Dict) -> str:
+    """Format an MMLU question with answer choices labeled A, B, C, D
+
+    Args:
+        question_dict: Dictionary with 'question', 'choices', 'answer', 'subject' keys
+
+    Returns:
+        Formatted prompt string
+    """
+    question = question_dict['question']
+    choices = question_dict['choices']
+
+    # Label choices as A, B, C, D
+    choice_letters = ['A', 'B', 'C', 'D']
+    formatted_choices = '\n'.join([f"{letter}. {choice}" for letter, choice in zip(choice_letters, choices)])
+
+    prompt = f"""Please solve the following MMLU question and submit your answer in the format \\box{{letter of answer choice}}.
+
+Question: {question}
+
+{formatted_choices}
+
+Your answer:"""
+
+    return prompt
+
+
+def extract_answer_from_generation(generated_text: str) -> str:
+    """Extract the answer letter (A, B, C, or D) from generated text.
+
+    Looks for patterns like:
+    - \\box{A}, \\box{B}, etc.
+    - Just the letter A, B, C, or D at the end
+
+    Args:
+        generated_text: The full generated text from the model
+
+    Returns:
+        The extracted answer letter ('A', 'B', 'C', or 'D'), or None if not found
+    """
+    import re
+
+    # Try to find \box{letter} pattern
+    box_match = re.search(r'\\box\{([A-D])\}', generated_text, re.IGNORECASE)
+    if box_match:
+        return box_match.group(1).upper()
+
+    # Try to find just the letter at the end
+    # Look for the last occurrence of A, B, C, or D (case insensitive)
+    letter_matches = re.findall(r'\b([A-D])\b', generated_text, re.IGNORECASE)
+    if letter_matches:
+        return letter_matches[-1].upper()
+
+    return None
+
+
+def get_activations_with_generation(
+    model: Any,
+    tokenizer: Any,
+    prompts: List[str],
+    layer_idx: int,
+    device: str = "cuda" if torch.cuda.is_available() else "cpu",
+    max_new_tokens: int = 100
+) -> Tuple[np.ndarray, List[str]]:
+    """
+    Get activations from a specific layer for a list of prompts after autoregressive generation.
+    Returns activations at the final non-EOS token position.
+
+    Args:
+        model: The language model
+        tokenizer: The tokenizer
+        prompts: List of prompts to generate from
+        layer_idx: Which layer to extract activations from
+        device: Device to run on
+        max_new_tokens: Maximum number of new tokens to generate
+
+    Returns:
+        activations: Array of activations (num_prompts, hidden_dim)
+        generated_texts: List of generated text completions
     """
     model.eval()
     activations_list = []
+    generated_texts = []
 
     with torch.no_grad():
         for i, prompt in enumerate(prompts):
-            if (i + 1) % 100 == 0 or i + 1 == len(prompts):
+            if (i + 1) % 10 == 0 or i + 1 == len(prompts):
                 print(f"  Processing {i + 1}/{len(prompts)} prompts...")
-            
+
+            # Tokenize the prompt
             inputs = tokenizer(prompt, return_tensors="pt").to(device)
 
-            # Determine the probe position: last non-special token (pre-EOS), ignoring padding
-            input_ids = inputs["input_ids"][0]
-            attention_mask_tensor = inputs["attention_mask"][0] if "attention_mask" in inputs else None
+            # Do autoregressive generation
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                output_hidden_states=True,
+                return_dict_in_generate=True,
+                do_sample=False,  # Use greedy decoding for consistency
+                pad_token_id=tokenizer.eos_token_id
+            )
 
-            if attention_mask_tensor is not None:
-                valid_positions = [i for i, m in enumerate(attention_mask_tensor.tolist()) if m == 1]
-            else:
-                valid_positions = list(range(input_ids.shape[0]))
+            # Get the generated sequence
+            generated_ids = outputs.sequences[0]
 
+            # Decode the generated text
+            generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+            generated_texts.append(generated_text)
+
+            # Find the position of the final non-EOS token
+            # We need to identify where the EOS token is (if present) and use the token before it
             special_token_ids = set(getattr(tokenizer, "all_special_ids", []))
-            real_token_positions = [i for i in valid_positions if int(input_ids[i]) not in special_token_ids]
-            probe_position = real_token_positions[-1] if len(real_token_positions) > 0 else valid_positions[-1]
 
-            # Use output_hidden_states to get all layer outputs
-            outputs = model(**inputs, output_hidden_states=True, use_cache=False)
+            # Find all non-special token positions
+            non_special_positions = [
+                idx for idx, token_id in enumerate(generated_ids.tolist())
+                if int(token_id) not in special_token_ids
+            ]
+
+            # Use the last non-special token position
+            if len(non_special_positions) > 0:
+                probe_position = non_special_positions[-1]
+            else:
+                # Fallback to second-to-last position if all are special tokens
+                probe_position = len(generated_ids) - 2 if len(generated_ids) > 1 else 0
+
+            # Now we need to run a forward pass to get the hidden states
+            # because generate() doesn't return hidden states in a convenient format
+            # We'll run inference on the full generated sequence
+            full_inputs = {"input_ids": generated_ids.unsqueeze(0)}
+            forward_outputs = model(**full_inputs, output_hidden_states=True, use_cache=False)
 
             # Get the hidden states from the specified layer
             # outputs.hidden_states is a tuple of (num_layers + 1) tensors
             # hidden_states[0] is embeddings; transformer block L is at hidden_states[L + 1]
-            layer_output = outputs.hidden_states[layer_idx + 1]
+            layer_output = forward_outputs.hidden_states[layer_idx + 1]
 
             # Get the activation at the chosen token position
             # Shape: (batch_size, seq_len, hidden_dim)
@@ -83,34 +172,31 @@ def get_activations(model: Any, tokenizer: Any, prompts: List[str], layer_idx: i
 
             activations_list.append(final_token_activation)
 
-    return np.array(activations_list)
+    return np.array(activations_list), generated_texts
 
 
-def cache_layer_activations( model_name: str, layer_idx: int, prompt_name: str = "prompt1"):
+def cache_mmlu_activations(
+    model_name: str,
+    layer_idx: int,
+    num_examples: int = 1000,
+    max_new_tokens: int = 100
+):
     """
-    Cache layer activations for all training data.
-    
+    Cache layer activations for MMLU questions with autoregressive generation.
+
     Args:
         model_name: Name of the model (e.g., "google/gemma-2-2b-it")
         layer_idx: Layer index to extract activations from
-        prompt_name: Name of the prompt template to use
-        output_dir: Directory to save cached activations
-        device: Device to run the model on
-        math_file: File containing math topics
-        non_math_file: File containing non-math topics
+        num_examples: Number of MMLU examples to process
+        max_new_tokens: Maximum number of tokens to generate
     """
     os.makedirs(OUT_DIR, exist_ok=True)
-    
-    topics, labels = load_data("data/tcs.txt", "data/normal.txt")
-    
-    print(f"Creating prompts using {prompt_name}...")
-    prompt_fn = PROMPTS[prompt_name]
-    prompts = [prompt_fn(topic) for topic in topics]
-    
+
+    print(f"Loading {num_examples} MMLU examples...")
+    questions, prompts = load_mmlu_data(num_examples=num_examples)
+
     print(f"Total samples: {len(prompts)}")
-    print(f"  Math topics: {sum(labels)}")
-    print(f"  Non-math topics: {len(labels) - sum(labels)}")
-    
+
     print(f"\nLoading model {model_name}...")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     preferred_dtype = torch.bfloat16
@@ -121,61 +207,142 @@ def cache_layer_activations( model_name: str, layer_idx: int, prompt_name: str =
         device_map="cuda",
         attn_implementation="eager"
     )
-    
+
     # Avoid cache during hidden-state extraction
     if hasattr(model, "config"):
         model.config.use_cache = False
-    
-    print(f"\nExtracting activations from layer {layer_idx}...")
-    activations = get_activations(model, tokenizer, prompts, layer_idx, "cuda")
-    
+
+    print(f"\nExtracting activations from layer {layer_idx} with autoregressive generation...")
+    print(f"  Max new tokens: {max_new_tokens}")
+    activations, generated_texts = get_activations_with_generation(
+        model, tokenizer, prompts, layer_idx, "cuda", max_new_tokens
+    )
+
     print(f"\nActivations shape: {activations.shape}")
     print(f"  Samples: {activations.shape[0]}")
     print(f"  Features: {activations.shape[1]}")
-    
-    # Convert labels to numpy array
-    labels_array = np.array(labels)
-    
-    # Convert topics and prompts to numpy arrays
-    topics_array = np.array(topics)
-    prompts_array = np.array(prompts)
-    
-    # Save activations and labels
-    output_prefix = f"activations_layer_{layer_idx:02d}_{prompt_name}"
-    
+
+    # Compute binary labels: 1 if correct, 0 if incorrect
+    print(f"\nComputing binary correctness labels...")
+    choice_letters = ['A', 'B', 'C', 'D']
+    binary_labels = []
+    correct_answer_indices = []
+    predicted_answers = []
+
+    num_correct = 0
+    num_incorrect = 0
+
+    for i, (question, generated_text) in enumerate(zip(questions, generated_texts)):
+        correct_answer_idx = question['answer']
+        correct_answer_letter = choice_letters[correct_answer_idx]
+
+        # Extract the model's predicted answer
+        predicted_answer = extract_answer_from_generation(generated_text)
+        predicted_answers.append(predicted_answer)
+        correct_answer_indices.append(correct_answer_idx)
+
+        # Determine if correct (unparseable counts as incorrect)
+        if predicted_answer == correct_answer_letter:
+            binary_labels.append(1)
+            num_correct += 1
+        else:
+            binary_labels.append(0)
+            num_incorrect += 1
+
+    labels = np.array(binary_labels)
+
+    print(f"  Correct answers: {num_correct}/{len(questions)} ({100*num_correct/len(questions):.1f}%)")
+    print(f"  Incorrect answers: {num_incorrect}/{len(questions)} ({100*num_incorrect/len(questions):.1f}%)")
+
+    # Extract subjects
+    subjects = np.array([q['subject'] for q in questions])
+
+    # Save activations and metadata
+    output_prefix = f"mmlu_activations_layer_{layer_idx:02d}_n{num_examples}"
+
     # Save as numpy arrays
     activations_file = os.path.join(OUT_DIR, f"{output_prefix}_activations.npy")
     labels_file = os.path.join(OUT_DIR, f"{output_prefix}_labels.npy")
-    topics_file = os.path.join(OUT_DIR, f"{output_prefix}_topics.npy")
+    subjects_file = os.path.join(OUT_DIR, f"{output_prefix}_subjects.npy")
     prompts_file = os.path.join(OUT_DIR, f"{output_prefix}_prompts.npy")
-    
+    questions_file = os.path.join(OUT_DIR, f"{output_prefix}_questions.json")
+    generated_file = os.path.join(OUT_DIR, f"{output_prefix}_generated.npy")
+    predicted_answers_file = os.path.join(OUT_DIR, f"{output_prefix}_predicted_answers.npy")
+    correct_answer_indices_file = os.path.join(OUT_DIR, f"{output_prefix}_correct_answer_indices.npy")
+    metadata_file = os.path.join(OUT_DIR, f"{output_prefix}_metadata.json")
+
     print(f"\nSaving cached activations...")
     np.save(activations_file, activations)
     print(f"  Saved activations to: {activations_file}")
-    
-    np.save(labels_file, labels_array)
+
+    np.save(labels_file, labels)
     print(f"  Saved labels to: {labels_file}")
-    
-    np.save(topics_file, topics_array)
-    print(f"  Saved topics to: {topics_file}")
-    
-    np.save(prompts_file, prompts_array)
+
+    np.save(subjects_file, subjects)
+    print(f"  Saved subjects to: {subjects_file}")
+
+    np.save(prompts_file, np.array(prompts))
     print(f"  Saved prompts to: {prompts_file}")
-    
-    print(f"\nDone! Cached {len(prompts)} samples from layer {layer_idx}")
+
+    np.save(generated_file, np.array(generated_texts))
+    print(f"  Saved generated texts to: {generated_file}")
+
+    np.save(predicted_answers_file, np.array(predicted_answers))
+    print(f"  Saved predicted answers to: {predicted_answers_file}")
+
+    np.save(correct_answer_indices_file, np.array(correct_answer_indices))
+    print(f"  Saved correct answer indices to: {correct_answer_indices_file}")
+
+    # Save questions as JSON
+    with open(questions_file, 'w') as f:
+        json.dump(questions, f, indent=2)
+    print(f"  Saved questions to: {questions_file}")
+
+    # Save metadata
+    metadata = {
+        "model_name": model_name,
+        "layer_idx": layer_idx,
+        "num_examples": num_examples,
+        "max_new_tokens": max_new_tokens,
+        "activation_shape": list(activations.shape),
+        "num_correct": int(num_correct),
+        "num_incorrect": int(num_incorrect),
+        "accuracy": float(num_correct) / len(questions),
+        "description": "MMLU activations collected on final non-EOS token after autoregressive generation. Labels are binary: 1=correct answer, 0=incorrect answer (including unparseable).",
+        "files": {
+            "activations": activations_file,
+            "labels": labels_file,
+            "subjects": subjects_file,
+            "prompts": prompts_file,
+            "questions": questions_file,
+            "generated_texts": generated_file,
+            "predicted_answers": predicted_answers_file,
+            "correct_answer_indices": correct_answer_indices_file
+        }
+    }
+    with open(metadata_file, 'w') as f:
+        json.dump(metadata, f, indent=2)
+    print(f"  Saved metadata to: {metadata_file}")
+
+    print(f"\nDone! Cached {len(prompts)} MMLU samples from layer {layer_idx}")
     print(f"\nTo load the cached data:")
     print(f"  activations = np.load('{activations_file}')")
-    print(f"  labels = np.load('{labels_file}')")
-    print(f"  topics = np.load('{topics_file}')")
+    print(f"  labels = np.load('{labels_file}')  # Binary: 1=correct, 0=incorrect")
+    print(f"  subjects = np.load('{subjects_file}')")
     print(f"  prompts = np.load('{prompts_file}')")
+    print(f"  generated_texts = np.load('{generated_file}')")
+    print(f"  predicted_answers = np.load('{predicted_answers_file}')")
+    print(f"  correct_answer_indices = np.load('{correct_answer_indices_file}')")
+    print(f"  with open('{questions_file}') as f: questions = json.load(f)")
+    print(f"  with open('{metadata_file}') as f: metadata = json.load(f)")
 
 
 if __name__ == "__main__":
-    for prompt in ["prompt1", "prompt2"]:
-        for layer in [13, 20, 5]:
-            cache_layer_activations(
-                model_name="google/gemma-3-4b-it",
-                layer_idx=layer,
-                prompt_name=prompt
-            )
+    # Cache MMLU activations for specific layers
+    cache_mmlu_activations(
+        model_name="google/gemma-3-1b-it",
+        layer_idx=13,
+        num_examples=1000,
+        max_new_tokens=100
+    )
 

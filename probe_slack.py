@@ -13,27 +13,44 @@ def reduce_dimension(activations, out_dim):
     pca = PCA(n_components=out_dim)
     return pca.fit_transform(activations)
 
-def load_cached_activations(layer_idx: int, prompt_name: str = "prompt1"):
-    output_prefix = f"activations_layer_{layer_idx:02d}_{prompt_name}"
+def load_mmlu_activations(layer_idx: int, num_examples: int = 1000):
+    """Load MMLU cached activations.
+
+    Args:
+        layer_idx: Layer index
+        num_examples: Number of examples in the cache
+
+    Returns:
+        activations: Activation array
+        labels: Binary labels (1=correct, 0=incorrect)
+        subjects: MMLU subjects
+        prompts: Question prompts
+    """
+    output_prefix = f"mmlu_activations_layer_{layer_idx:02d}_n{num_examples}"
     activations_file = os.path.join(CACHE_DIR, f"{output_prefix}_activations.npy")
     labels_file = os.path.join(CACHE_DIR, f"{output_prefix}_labels.npy")
-    topics_file = os.path.join(CACHE_DIR, f"{output_prefix}_topics.npy")
+    subjects_file = os.path.join(CACHE_DIR, f"{output_prefix}_subjects.npy")
     prompts_file = os.path.join(CACHE_DIR, f"{output_prefix}_prompts.npy")
-    print(f"Loading cached activations from {CACHE_DIR}...")
+
+    print(f"Loading MMLU cached activations from {CACHE_DIR}...")
     print(f"  Activations: {activations_file}")
     print(f"  Labels: {labels_file}")
+
     if not os.path.exists(activations_file):
         raise FileNotFoundError(f"Cached activations not found: {activations_file}")
     if not os.path.exists(labels_file):
         raise FileNotFoundError(f"Cached labels not found: {labels_file}")
+
     activations = np.load(activations_file)
     labels = np.load(labels_file)
-    topics = np.load(topics_file, allow_pickle=True) if os.path.exists(topics_file) else None
+    subjects = np.load(subjects_file, allow_pickle=True) if os.path.exists(subjects_file) else None
     prompts = np.load(prompts_file, allow_pickle=True) if os.path.exists(prompts_file) else None
+
     print(f"  Loaded {activations.shape[0]} samples with {activations.shape[1]} features")
-    print(f"  Math samples: {np.sum(labels)}")
-    print(f"  Non-math samples: {len(labels) - np.sum(labels)}")
-    return activations, labels, topics, prompts
+    print(f"  Correct answers: {np.sum(labels)} ({100*np.sum(labels)/len(labels):.1f}%)")
+    print(f"  Incorrect answers: {len(labels) - np.sum(labels)} ({100*(len(labels)-np.sum(labels))/len(labels):.1f}%)")
+
+    return activations, labels, subjects, prompts
 
 def plot_roc_and_density(Xtrain, Ytrain, Xtest, Ytest, fname, train_topics, train_prompts, base_point=None):
     clf = LogisticRegression(max_iter=1000)
@@ -58,8 +75,8 @@ def plot_roc_and_density(Xtrain, Ytrain, Xtest, Ytest, fname, train_topics, trai
     plt.close()
 
     plt.figure(figsize=(10, 6))
-    plt.hist(y_pred_logits[Ytest==1], bins=50, alpha=0.6, color='red', label='Math', density=True, edgecolor='black', linewidth=0.5)
-    plt.hist(y_pred_logits[Ytest==0], bins=50, alpha=0.6, color='green', label='Non-Math', density=True, edgecolor='black', linewidth=0.5)
+    plt.hist(y_pred_logits[Ytest==1], bins=50, alpha=0.6, color='red', label='Class 1', density=True, edgecolor='black', linewidth=0.5)
+    plt.hist(y_pred_logits[Ytest==0], bins=50, alpha=0.6, color='green', label='Class 0', density=True, edgecolor='black', linewidth=0.5)
     plt.xlabel('Classifier Score', fontsize=12)
     plt.ylabel('Density', fontsize=12)
     plt.title(f'Score distribution for {fname}', fontsize=14)
@@ -376,6 +393,68 @@ def plot_corruption_heatmap(activations, labels, fname, n_trials=5):
     plt.savefig(f"{OUT_DIR}/corruption_heatmap_{fname}.png", dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Saved corruption line plot to {OUT_DIR}/corruption_heatmap_{fname}.png")
+
+def makeplots_mmlu(layer, num_examples=1000, reduce_dim=None):
+    """Run analysis on MMLU activations."""
+    activations, labels, subjects, prompts = load_mmlu_activations(layer, num_examples)
+    idx = np.random.permutation(len(activations))
+    activations = activations[idx]
+    labels = labels[idx]
+    subjects = subjects[idx] if subjects is not None else None
+    prompts = prompts[idx] if prompts is not None else None
+
+    Xtrain = activations[:len(activations)//2]
+    Xtest = activations[len(activations)//2:]
+
+    if reduce_dim is not None:
+        Xtrain = reduce_dimension(Xtrain, reduce_dim)
+        Xtest = reduce_dimension(Xtest, reduce_dim)
+
+    Ytrain = labels[:len(labels)//2]
+    Ytest = labels[len(labels)//2:]
+
+    train_subjects = subjects[:len(subjects)//2] if subjects is not None else None
+    train_prompts = prompts[:len(prompts)//2] if prompts is not None else None
+
+    fname = f"mmlu_layer{layer}_n{num_examples}"
+    if reduce_dim is not None:
+        fname += f"_reducedim{reduce_dim}"
+    plot_roc_and_density(Xtrain, Ytrain, Xtest, Ytest, fname, train_subjects, train_prompts)
+    plot_pca_activations(Xtest, Ytest, fname)
+    anomaly_slack(Xtrain, Ytrain, Xtest, Ytest, fname)
+
+    # Label corruption experiment
+    class1_indices = np.where(Ytrain == 1)[0]
+    class0_indices = np.where(Ytrain == 0)[0]
+
+    if len(class1_indices) > 100:
+        np.random.shuffle(class1_indices)
+        class1_indices = class1_indices[:100]
+
+    kept_indices = np.concatenate([class1_indices, class0_indices])
+    Xtrain_corrupted = Xtrain[kept_indices]
+    Ytrain_corrupted = Ytrain[kept_indices].copy()
+    train_subjects_corrupted = train_subjects[kept_indices] if train_subjects is not None else None
+    train_prompts_corrupted = train_prompts[kept_indices] if train_prompts is not None else None
+
+    # Flip 10% of the 0 labels to 1s
+    class0_mask = Ytrain_corrupted == 0
+    class0_count = np.sum(class0_mask)
+    flip_count = int(0.1 * class0_count)
+    class0_positions = np.where(class0_mask)[0]
+    np.random.shuffle(class0_positions)
+    flip_positions = class0_positions[:flip_count]
+    Ytrain_corrupted[flip_positions] = 1
+
+    plot_roc_and_density(Xtrain_corrupted, Ytrain_corrupted, Xtest, Ytest, "corrupted_" + fname, train_subjects_corrupted, train_prompts_corrupted, base_point=(.1,1))
+
+    print("\nGenerating AUROC vs N plot...")
+    plot_auroc_vs_n(activations, labels, fname)
+    print("\nGenerating label corruption plot...")
+    plot_label_corruption(Xtrain, Ytrain, Xtest, Ytest, fname)
+    print("\nGenerating corruption heatmap...")
+    plot_corruption_heatmap(activations, labels, fname)
+
 
 def makeplots(prompt, layer, reduce_dim=None):
     activations, labels, topics, prompts = load_cached_activations(layer, prompt)
