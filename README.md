@@ -1,116 +1,330 @@
-# Probes for Diffuse Control
+# Probes for Diffuse Control (Rewritten)
 
-Experiments to probe whether language models internally know when they are correct or incorrect.
+A clean, well-structured toolkit for probing whether language models internally know when they are correct or incorrect.
 
-## Configuration
+## Overview
 
-All model-specific settings are centralized in `config.py`. To switch models:
+This codebase tests whether neural language models have internal representations that encode their own correctness. The key hypothesis: **If we can train a linear probe to predict whether the model answered correctly from its internal activations, then the model "knows" when it's right or wrong.**
 
-1. Edit `config.py` and update `MODEL_NAME` and `MODEL_SHORT_NAME`
-2. Run scripts normally - they will automatically use the new configuration
+### Methodology
 
-```python
-# Example config.py
-MODEL_NAME = "google/gemma-3-1b-it"  # Full model name
-MODEL_SHORT_NAME = "gemma-3-1b"      # Short name for directories
-```
+1. **Generate** completions for MMLU multiple-choice questions
+2. **Extract** neural activations at specific layers and token positions
+3. **Train** linear probes to predict correctness from activations
+4. **Evaluate** probe performance using AUROC and robustness experiments
 
-## Directory Structure
+## Key Features
 
-The system organizes experiments by model:
+✨ **Clean Architecture**: Modular library design with clear separation of concerns
 
-```
-experiments/
-├── gemma-3-1b/
-│   ├── cached_activations/   # Cached neural activations
-│   └── results/               # Analysis plots and outputs
-├── gemma-3-12b/
-│   ├── cached_activations/
-│   └── results/
-└── ...
-```
+🔧 **Token Position Support**: Extract activations from first, last, middle, or all tokens
+
+🐛 **Bug Fixes**: 
+- Fixed anomaly detection (now correctly treats incorrect as anomalies)
+- Fixed hardcoded model names
+- Unified configuration across all modules
+
+🧪 **Unit Tests**: Comprehensive test coverage with sanity checks
+
+⚡ **Performance**: Concurrent API requests and multi-GPU parallelism
 
 ## Quick Start
 
-### 1. Start VLLM Servers
-
-The VLLM servers read configuration from `config.py`:
+### 1. Installation
 
 ```bash
-bash vllm.bash
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-This will start multiple VLLM servers (one per GPU) on consecutive ports starting from `VLLM_BASE_PORT`.
-
-### 2. Cache Activations
-
-Generate completions and cache activations:
+### 2. Download MMLU Data
 
 ```bash
-python cache_activations.py
+python3 -c "from datasets import load_dataset; dataset = load_dataset('cais/mmlu', 'all'); dataset['auxiliary_train'].to_json('mmlu_data/train.json')"
 ```
 
-All parameters default to `config.py` settings. Activations are saved to `experiments/{MODEL_SHORT_NAME}/cached_activations/`.
+### 3. Configure
 
-### 3. Run Analysis
+Edit `config.py` to set your model and VLLM server parameters:
 
-Analyze the cached activations:
-
-```bash
-python probe_slack.py
-```
-
-Results are saved to `experiments/{MODEL_SHORT_NAME}/results/`.
-
-## Configuration Reference
-
-See `config.py` for all available settings:
-
-- `MODEL_NAME`: Full HuggingFace model identifier
-- `MODEL_SHORT_NAME`: Short name used for directory structure
-- `VLLM_BASE_PORT`: Starting port for VLLM servers (default: 8000)
-- `VLLM_NUM_SERVERS`: Number of VLLM servers/GPUs to use (default: 8)
-- `VLLM_MAX_MODEL_LEN`: Maximum sequence length for VLLM
-- `VLLM_GPU_MEMORY_UTILIZATION`: GPU memory to use (default: 0.93)
-- `MAX_NEW_TOKENS`: Maximum tokens to generate per prompt
-- `TEMPERATURE`: Sampling temperature (0.0 = greedy)
-- `DEFAULT_LAYER`: Default layer to probe (default: 13)
-- `DEFAULT_NUM_EXAMPLES`: Default number of MMLU examples (default: 200)
-
-## Switching Models
-
-To switch to a different model:
-
-1. Update `config.py`:
 ```python
 MODEL_NAME = "google/gemma-3-12b-it"
 MODEL_SHORT_NAME = "gemma-3-12b"
+VLLM_BASE_PORT = 8100
+VLLM_NUM_SERVERS = 8
 ```
 
-2. Restart VLLM servers:
+### 4. Start VLLM Servers
+
 ```bash
-# Stop existing servers (Ctrl+C)
-bash vllm.bash  # Starts with new model
+bash vllm_launcher.sh
 ```
 
-3. Run experiments:
+This launches multiple VLLM servers (one per GPU) for fast parallel inference.
+
+### 5. Cache Activations
+
 ```bash
-python cache_activations.py  # Uses new model automatically
-python probe_slack.py         # Analyzes new model's activations
+# Cache activations at layer 13, last token position
+python3 cache_activations.py
+
+# Or specify parameters
+python3 cache_activations.py --layer 15 --position first --num-examples 500
 ```
 
-All outputs will be stored in `experiments/gemma-3-12b/` automatically.
+### 6. Run Probe Analysis
 
-## Files
+```bash
+# Analyze cached activations
+python3 probe_analysis.py
 
-- `config.py`: Central configuration file
-- `cache_activations.py`: Generate and cache activations
-- `probe_slack.py`: Analyze activations with probes
-- `vllm.bash`: Start VLLM API servers
-- `download_mmlu.py`: Download MMLU dataset
-- `evaluate_gemma_mmlu.py`: Evaluate model on MMLU
+# Or specify parameters
+python3 probe_analysis.py --layer 15 --position first --num-examples 500
+```
 
-## Experiment Details
+### 7. Sweep Across Layers/Positions
 
-See the main [evaluation README](README_evaluation.md) for details on the MMLU evaluation experiments.
+```bash
+# Sweep across multiple layers
+python3 sweep_layers.py --mode layers --layers 10 12 14 16
+
+# Sweep across token positions
+python3 sweep_layers.py --mode positions --positions last first middle
+
+# Quick sweep (layers 10-16)
+python3 sweep_layers.py --quick
+```
+
+## Project Structure
+
+```
+rewritten/
+├── config.py                 # Central configuration
+├── cache_activations.py      # Cache activations from VLLM
+├── probe_analysis.py          # Probe training and evaluation
+├── sweep_layers.py            # Sweep layers/positions
+├── vllm_launcher.sh           # Launch VLLM servers
+├── requirements.txt           # Python dependencies
+├── lib/                       # Core library
+│   ├── __init__.py
+│   ├── data.py               # MMLU data loading
+│   ├── generation.py         # VLLM generation
+│   ├── activations.py        # Activation extraction
+│   ├── probes.py             # Probe training
+│   └── visualization.py      # Plotting utilities
+└── tests/                     # Unit tests
+    ├── test_data.py
+    ├── test_activations.py
+    └── test_probes.py
+```
+
+## Configuration
+
+All settings are in `config.py`:
+
+### Model Configuration
+- `MODEL_NAME`: Full HuggingFace model identifier
+- `MODEL_SHORT_NAME`: Short name for directories/files
+
+### VLLM Configuration
+- `VLLM_BASE_PORT`: Starting port for VLLM servers
+- `VLLM_NUM_SERVERS`: Number of servers/GPUs
+- `VLLM_MAX_MODEL_LEN`: Maximum sequence length
+- `VLLM_GPU_MEMORY_UTILIZATION`: GPU memory fraction to use
+
+### Experiment Configuration
+- `DEFAULT_LAYER`: Default layer to probe
+- `DEFAULT_NUM_EXAMPLES`: Default number of MMLU examples
+- `DEFAULT_TOKEN_POSITION`: Token position ("last", "first", "middle", "all")
+- `TEMPERATURE`: Sampling temperature (1.0 = default)
+
+## Token Position Support
+
+One of the key improvements in this rewrite is full support for different token positions:
+
+- **`last`**: Extract from the last non-special token (default)
+- **`first`**: Extract from the first non-special token
+- **`middle`**: Extract from the middle non-special token
+- **`all`**: Average activations over all non-special tokens
+
+This allows you to test which token position best captures the model's "knowledge" of correctness.
+
+## Experiments
+
+The probe analysis runs several experiments:
+
+### 1. Linear Probe
+Trains a logistic regression probe to predict correctness from activations.
+- **Metric**: AUROC (Area Under ROC Curve)
+- **Interpretation**: AUROC > 0.5 indicates the model has some internal signal about correctness
+
+### 2. PCA Visualization
+Projects activations to 2D using PCA to visualize separation between correct/incorrect.
+
+### 3. Anomaly Detection
+Fits a Gaussian to correct answers, detects incorrect as anomalies.
+- **Fixed Bug**: Now correctly treats incorrect (class 0) as anomalies, not correct (class 1)
+
+### 4. AUROC vs Training Set Size
+Measures how probe performance scales with training data size.
+
+### 5. Label Corruption Robustness
+Tests probe robustness when training labels are corrupted.
+
+## Running Tests
+
+```bash
+# Run all tests
+python3 -m unittest discover tests/
+
+# Run specific test module
+python3 -m unittest tests.test_data
+python3 -m unittest tests.test_activations
+python3 -m unittest tests.test_probes
+```
+
+Tests include:
+- Data loading and formatting
+- Answer extraction
+- Token position selection
+- Probe training sanity checks
+- Anomaly detection correctness
+
+## Example Workflow
+
+```bash
+# 1. Start VLLM servers
+bash vllm_launcher.sh
+
+# Wait for servers to start (check with curl)
+curl http://localhost:8100/v1/models
+
+# 2. Quick layer sweep
+python3 sweep_layers.py --quick
+
+# 3. Token position comparison at best layer
+python3 sweep_layers.py --mode positions --layer 13 --positions last first middle
+
+# 4. Detailed analysis of best configuration
+python3 probe_analysis.py --layer 13 --position last --num-examples 500
+```
+
+## Output Files
+
+### Cached Activations
+Files saved to `experiments/{MODEL_SHORT_NAME}/cached_activations/`:
+- `mmlu_layer{XX}_pos-{position}_n{N}_activations.npy`: Activations
+- `mmlu_layer{XX}_pos-{position}_n{N}_labels.npy`: Binary labels (1=correct, 0=incorrect)
+- `mmlu_layer{XX}_pos-{position}_n{N}_metadata.json`: Run metadata
+
+### Analysis Results
+Files saved to `experiments/{MODEL_SHORT_NAME}/results/`:
+- `roc_*.png`: ROC curves
+- `scores_*.png`: Score distributions
+- `pca_*.png`: PCA visualizations
+- `auroc_*.json`: AUROC scores
+- `*_summary.txt`: Comparison summaries
+
+## Bug Fixes from Original
+
+This rewrite fixes several issues in the original codebase:
+
+1. **Anomaly Detection Bug**: Now correctly fits Gaussian to correct answers and detects incorrect as anomalies (was backwards)
+
+2. **Hardcoded Model Names**: Removed hardcoded `"gemma"` in API calls, now uses `config.MODEL_SHORT_NAME`
+
+3. **Config Inconsistencies**: Unified configuration - all modules now use `config.py`
+
+4. **Temperature Inconsistency**: Now consistently uses `config.TEMPERATURE` (1.0) everywhere
+
+5. **Missing Token Position Support**: Added full support for first/last/middle/all token positions
+
+## Architecture Improvements
+
+- **Modular Library Design**: Core functionality in `lib/` for easy reuse
+- **Clear Separation**: Data, generation, activations, probes, visualization are separate modules
+- **Type Hints**: Added type hints throughout for better code clarity
+- **Unit Tests**: Comprehensive test coverage with sanity checks
+- **Documentation**: Detailed docstrings and README
+
+## Advanced Usage
+
+### Custom Token Positions
+
+```python
+from lib.activations import get_probe_positions
+
+# Get token positions programmatically
+positions = get_probe_positions(
+    input_ids, 
+    special_token_ids, 
+    token_position="middle"
+)
+```
+
+### Custom Probe Experiments
+
+```python
+from lib.probes import train_linear_probe
+
+# Train custom probe
+auroc, clf, probs, fpr, tpr = train_linear_probe(
+    X_train, y_train, X_test, y_test,
+    max_iter=1000,
+    random_state=42
+)
+```
+
+### Batch Processing
+
+```python
+from lib.generation import generate_with_vllm_multi_server
+
+# Generate completions in parallel
+full_texts, completions = generate_with_vllm_multi_server(
+    prompts=prompts,
+    max_new_tokens=100,
+    temperature=1.0,
+    model_name="gemma-3-12b",
+    num_servers=8,
+    base_port=8100
+)
+```
+
+## Troubleshooting
+
+### VLLM Servers Won't Start
+- Check GPU availability: `nvidia-smi`
+- Verify model is downloaded: `huggingface-cli download {MODEL_NAME}`
+- Check port conflicts: `netstat -tulpn | grep {PORT}`
+
+### Out of Memory Errors
+- Reduce `VLLM_GPU_MEMORY_UTILIZATION` in config.py
+- Reduce `ACTIVATION_BATCH_SIZE` in config.py
+- Use fewer servers: reduce `VLLM_NUM_SERVERS`
+
+### Activation Extraction Fails
+- Ensure model is cached: Run once with `use_model_cache=False`
+- Check layer index is valid for your model
+- Verify token position is valid
+
+## Citation
+
+If you use this code, please cite the original research.
+
+## License
+
+[Specify license]
+
+## Contributing
+
+Contributions welcome! Please:
+1. Add unit tests for new features
+2. Update documentation
+3. Follow existing code style
+4. Run tests before submitting
 
