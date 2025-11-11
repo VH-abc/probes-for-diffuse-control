@@ -1,1 +1,4 @@
 mmlu_data/
+venv
+cached_activations
+results

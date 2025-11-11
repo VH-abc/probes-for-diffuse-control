@@ -465,4 +465,4 @@ def makeplots_mmlu(layer, num_examples=1000, reduce_dim=None):
 if __name__ == "__main__":
     # Example: Run analysis on MMLU activations
     # Uncomment to run:
-    # makeplots_mmlu(layer=13, num_examples=1000)
+    makeplots_mmlu(layer=13, num_examples=10)
