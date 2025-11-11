@@ -1,5 +1,8 @@
 mmlu_data/
 .venv/
 venv/
+venv
 env/
 cached_activations/
+cached_activations
+results
