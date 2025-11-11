@@ -342,7 +342,7 @@ if __name__ == "__main__":
     cache_mmlu_activations(
         model_name="google/gemma-3-1b-it",
         layer_idx=13,
-        num_examples=1000,
+        num_examples=20,
         max_new_tokens=100
     )
 
