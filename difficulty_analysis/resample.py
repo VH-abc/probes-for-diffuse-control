@@ -10,15 +10,13 @@ import json
 import random
 import numpy as np
 import asyncio
+import sys
+import os
 from datasets import load_dataset
 
-from common import (
-    get_vllm_clients,
-    run_inference_batch,
-    VLLM_BASE_PORT,
-    NUM_VLLM_SERVERS,
-    MAX_CONCURRENT_REQUESTS
-)
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils import get_vllm_clients, run_inference_batch, VLLM_BASE_PORT, NUM_VLLM_SERVERS, MAX_CONCURRENT_REQUESTS
 
 # Configuration
 NUM_TASKS = 300
