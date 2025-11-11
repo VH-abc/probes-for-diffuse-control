@@ -110,24 +110,29 @@ def plot_roc_and_density(Xtrain, Ytrain, Xtest, Ytest, fname, train_topics, trai
     output_lines.append(f"\n3 LOWEST SCORING TRAINING POINTS:")
     output_lines.append(f"{'-'*80}")
     for i, idx in enumerate(lowest_indices, 1):
-        output_lines.append(f"\n#{i} - Score: {train_scores[idx]:.4f}, Label: {int(Ytrain[idx])} ({'Math' if Ytrain[idx] == 1 else 'Non-Math'})")
-        output_lines.append(f"   Topic: {train_topics[idx]}")
-        output_lines.append(f"   Prompt: {train_prompts[idx][:100]}...")
-        output_lines.append(f"   Prompt: {train_prompts[idx][:100]}...")
-    
+        output_lines.append(f"\n#{i} - Score: {train_scores[idx]:.4f}, Label: {int(Ytrain[idx])} ({'Class 1' if Ytrain[idx] == 1 else 'Class 0'})")
+        if train_topics is not None:
+            output_lines.append(f"   Metadata: {train_topics[idx]}")
+        if train_prompts is not None:
+            output_lines.append(f"   Prompt: {train_prompts[idx][:100]}...")
+
     output_lines.append(f"\n3 HIGHEST SCORING TRAINING POINTS:")
     output_lines.append(f"{'-'*80}")
     for i, idx in enumerate(highest_indices, 1):
-        output_lines.append(f"\n#{i} - Score: {train_scores[idx]:.4f}, Label: {int(Ytrain[idx])} ({'Math' if Ytrain[idx] == 1 else 'Non-Math'})")
-        output_lines.append(f"   Topic: {train_topics[idx]}")
-        output_lines.append(f"   Prompt: {train_prompts[idx][:100]}...")
-    
+        output_lines.append(f"\n#{i} - Score: {train_scores[idx]:.4f}, Label: {int(Ytrain[idx])} ({'Class 1' if Ytrain[idx] == 1 else 'Class 0'})")
+        if train_topics is not None:
+            output_lines.append(f"   Metadata: {train_topics[idx]}")
+        if train_prompts is not None:
+            output_lines.append(f"   Prompt: {train_prompts[idx][:100]}...")
+
     output_lines.append(f"\n3 CLOSEST TO ZERO SCORING TRAINING POINTS:")
     output_lines.append(f"{'-'*80}")
     for i, idx in enumerate(closest_to_zero_indices, 1):
-        output_lines.append(f"\n#{i} - Score: {train_scores[idx]:.4f}, Label: {int(Ytrain[idx])} ({'Math' if Ytrain[idx] == 1 else 'Non-Math'})")
-        output_lines.append(f"   Topic: {train_topics[idx]}")
-        output_lines.append(f"   Prompt: {train_prompts[idx][:100]}...")
+        output_lines.append(f"\n#{i} - Score: {train_scores[idx]:.4f}, Label: {int(Ytrain[idx])} ({'Class 1' if Ytrain[idx] == 1 else 'Class 0'})")
+        if train_topics is not None:
+            output_lines.append(f"   Metadata: {train_topics[idx]}")
+        if train_prompts is not None:
+            output_lines.append(f"   Prompt: {train_prompts[idx][:100]}...")
     
     output_lines.append(f"\n{'='*80}\n")
     
@@ -148,8 +153,8 @@ def plot_pca_activations(X, Y, fname):
     X_pca = pca.fit_transform(X)
     explained_var = pca.explained_variance_ratio_
     plt.figure(figsize=(10, 8))
-    plt.scatter(X_pca[Y==1, 0], X_pca[Y==1, 1], c='red', label='Math', alpha=0.6, s=100, edgecolors='black', linewidth=0.5)
-    plt.scatter(X_pca[Y==0, 0], X_pca[Y==0, 1], c='green', label='Non-Math', alpha=0.6, s=100, edgecolors='black', linewidth=0.5)
+    plt.scatter(X_pca[Y==1, 0], X_pca[Y==1, 1], c='red', label='Class 1', alpha=0.6, s=100, edgecolors='black', linewidth=0.5)
+    plt.scatter(X_pca[Y==0, 0], X_pca[Y==0, 1], c='green', label='Class 0', alpha=0.6, s=100, edgecolors='black', linewidth=0.5)
     plt.xlabel(f'PC1 ({explained_var[0]:.1%} variance)', fontsize=12)
     plt.ylabel(f'PC2 ({explained_var[1]:.1%} variance)', fontsize=12)
     plt.title(f'PCA of {fname}', fontsize=14)
@@ -161,28 +166,26 @@ def plot_pca_activations(X, Y, fname):
 
 def anomaly_slack(X_train: np.ndarray, train_labels: np.ndarray, X_test: np.ndarray, test_labels: np.ndarray, fname) -> float:
     """
-    Gaussian anomaly detection model. Fits a Gaussian to training data with label 0 (non-math),
+    Gaussian anomaly detection model. Fits a Gaussian to training data with label 0,
     then uses negative log-likelihood as anomaly scores for classification.
-    
+
     Args:
         X_train: Training activations (n_samples, n_features)
-        train_labels: Training labels (n_samples,) - 0 for non-math, 1 for math
+        train_labels: Training labels (n_samples,) - binary classification
         X_test: Test activations (n_samples, n_features)
         test_labels: Test labels (n_samples,)
-        output_dir: Directory to save plots
-        layer_idx: Optional layer index for the title
-        prompt_name: Name of the prompt template used
-        
+        fname: Filename prefix for saving plots
+
     Returns:
         AUROC score
     """
     print(f"\nPerforming Gaussian anomaly detection...")
-    print(f"Building Gaussian model on non-math (label 0) training samples...")
-    
-    # Filter training data to only label 0 (non-math terms)
+    print(f"Building Gaussian model on class 0 training samples...")
+
+    # Filter training data to only label 0
     X_train_normal = X_train[train_labels == 0]
-    
-    print(f"  Using {X_train_normal.shape[0]} non-math training samples")
+
+    print(f"  Using {X_train_normal.shape[0]} class 0 training samples")
     print(f"  Feature dimension: {X_train_normal.shape[1]}")
     
     # Fit a multivariate Gaussian: estimate mean and covariance
