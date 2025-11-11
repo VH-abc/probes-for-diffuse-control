@@ -39,7 +39,9 @@ def download_mmlu():
 
     print(f"\nSaving dataset to {data_dir}/...")
     for split in dataset.keys():
-        output_path = os.path.join(data_dir, f"{split}.json")
+        # Rename auxiliary_train to train
+        split_name = "train" if split == "auxiliary_train" else split
+        output_path = os.path.join(data_dir, f"{split_name}.json")
         dataset[split].to_json(output_path)
         print(f"  Saved {split} split to {output_path}")
 

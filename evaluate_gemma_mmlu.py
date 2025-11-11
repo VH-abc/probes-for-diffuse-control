@@ -42,7 +42,7 @@ D. {choice_d}"""
 def load_mmlu_biology():
     """Load the high_school_biology subset of MMLU."""
     print("Loading MMLU high_school_biology dataset...")
-    dataset = load_dataset("cais/mmlu", "high_school_biology")
+    dataset = load_dataset("cais/mmlu", "high_school_government_and_politics")
     return dataset
 
 
