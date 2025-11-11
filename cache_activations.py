@@ -9,7 +9,19 @@ from typing import List, Tuple, Any, Dict
 import multiprocessing as mp
 from multiprocessing import Manager
 import torch.multiprocessing
-OUT_DIR = "cached_activations"
+from config import (
+    MODEL_NAME,
+    MODEL_SHORT_NAME,
+    CACHED_ACTIVATIONS_DIR,
+    VLLM_BASE_PORT,
+    VLLM_NUM_SERVERS,
+    MAX_NEW_TOKENS,
+    TEMPERATURE,
+    DEFAULT_LAYER,
+    DEFAULT_NUM_EXAMPLES,
+    get_model_config,
+    print_config
+)
 
 
 def load_mmlu_data(mmlu_file: str = "mmlu_data/train.json", num_examples: int = 1000) -> Tuple[List[Dict], List[str]]:
@@ -220,7 +232,7 @@ def extract_activations_single_gpu(gpu_id, model_name, full_texts, layer_idx, re
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             device_map=device,
             attn_implementation="eager"
         )
@@ -339,11 +351,11 @@ def get_activations_from_texts_multi_gpu(
 
 
 def cache_mmlu_activations(
-    model_name: str,
-    layer_idx: int,
-    num_examples: int = 1000,
-    max_new_tokens: int = 100,
-    num_gpus: int = 8
+    model_name: str = None,
+    layer_idx: int = None,
+    num_examples: int = None,
+    max_new_tokens: int = None,
+    num_gpus: int = None
 ):
     """
     Cache layer activations for MMLU questions with autoregressive generation.
@@ -352,20 +364,34 @@ def cache_mmlu_activations(
     NOTE: Requires VLLM servers to be running on ports 8000-8007 (see vllm.bash)
 
     Args:
-        model_name: Name of the model (e.g., "google/gemma-3-1b-it") - used for activation extraction
-        layer_idx: Layer index to extract activations from
-        num_examples: Number of MMLU examples to process
-        max_new_tokens: Maximum number of tokens to generate
-        num_gpus: Number of VLLM servers/GPUs to use (default: 8)
+        model_name: Name of the model - defaults to config.MODEL_NAME
+        layer_idx: Layer index to extract activations from - defaults to config.DEFAULT_LAYER
+        num_examples: Number of MMLU examples to process - defaults to config.DEFAULT_NUM_EXAMPLES
+        max_new_tokens: Maximum number of tokens to generate - defaults to config.MAX_NEW_TOKENS
+        num_gpus: Number of VLLM servers/GPUs to use - defaults to config.VLLM_NUM_SERVERS
     """
-    os.makedirs(OUT_DIR, exist_ok=True)
+    # Use config defaults if not specified
+    if model_name is None:
+        model_name = MODEL_NAME
+    if layer_idx is None:
+        layer_idx = DEFAULT_LAYER
+    if num_examples is None:
+        num_examples = DEFAULT_NUM_EXAMPLES
+    if max_new_tokens is None:
+        max_new_tokens = MAX_NEW_TOKENS
+    if num_gpus is None:
+        num_gpus = VLLM_NUM_SERVERS
+    
+    os.makedirs(CACHED_ACTIVATIONS_DIR, exist_ok=True)
 
+    print_config()
+    print(f"\nACTIVATION CACHING RUN")
     print(f"="*80)
-    print(f"MULTI-GPU ACTIVATION CACHING")
     print(f"Model: {model_name}")
     print(f"Layer: {layer_idx}")
     print(f"Examples: {num_examples}")
     print(f"GPUs: {num_gpus}")
+    print(f"Output directory: {CACHED_ACTIVATIONS_DIR}")
     print(f"="*80)
 
     print(f"\nLoading {num_examples} MMLU examples...")
@@ -380,9 +406,9 @@ def cache_mmlu_activations(
     generated_texts, completions_only = generate_with_vllm_multi_server(
         prompts=prompts,
         max_new_tokens=max_new_tokens,
-        temperature=0.0,  # Greedy decoding
+        temperature=TEMPERATURE,
         num_servers=num_gpus,
-        base_port=8000
+        base_port=VLLM_BASE_PORT
     )
 
     # Step 2: Extract activations using multiple GPUs in parallel
@@ -441,16 +467,16 @@ def cache_mmlu_activations(
     output_prefix = f"mmlu_activations_layer_{layer_idx:02d}_n{num_examples}"
 
     # Save as numpy arrays
-    activations_file = os.path.join(OUT_DIR, f"{output_prefix}_activations.npy")
-    labels_file = os.path.join(OUT_DIR, f"{output_prefix}_labels.npy")
-    subjects_file = os.path.join(OUT_DIR, f"{output_prefix}_subjects.npy")
-    prompts_file = os.path.join(OUT_DIR, f"{output_prefix}_prompts.npy")
-    questions_file = os.path.join(OUT_DIR, f"{output_prefix}_questions.json")
-    generated_file = os.path.join(OUT_DIR, f"{output_prefix}_generated.npy")
-    completions_file = os.path.join(OUT_DIR, f"{output_prefix}_completions.npy")
-    predicted_answers_file = os.path.join(OUT_DIR, f"{output_prefix}_predicted_answers.npy")
-    correct_answer_indices_file = os.path.join(OUT_DIR, f"{output_prefix}_correct_answer_indices.npy")
-    metadata_file = os.path.join(OUT_DIR, f"{output_prefix}_metadata.json")
+    activations_file = os.path.join(CACHED_ACTIVATIONS_DIR, f"{output_prefix}_activations.npy")
+    labels_file = os.path.join(CACHED_ACTIVATIONS_DIR, f"{output_prefix}_labels.npy")
+    subjects_file = os.path.join(CACHED_ACTIVATIONS_DIR, f"{output_prefix}_subjects.npy")
+    prompts_file = os.path.join(CACHED_ACTIVATIONS_DIR, f"{output_prefix}_prompts.npy")
+    questions_file = os.path.join(CACHED_ACTIVATIONS_DIR, f"{output_prefix}_questions.json")
+    generated_file = os.path.join(CACHED_ACTIVATIONS_DIR, f"{output_prefix}_generated.npy")
+    completions_file = os.path.join(CACHED_ACTIVATIONS_DIR, f"{output_prefix}_completions.npy")
+    predicted_answers_file = os.path.join(CACHED_ACTIVATIONS_DIR, f"{output_prefix}_predicted_answers.npy")
+    correct_answer_indices_file = os.path.join(CACHED_ACTIVATIONS_DIR, f"{output_prefix}_correct_answer_indices.npy")
+    metadata_file = os.path.join(CACHED_ACTIVATIONS_DIR, f"{output_prefix}_metadata.json")
 
     print(f"\nSaving cached activations...")
     np.save(activations_file, activations)
@@ -532,14 +558,9 @@ if __name__ == "__main__":
     
     # IMPORTANT: Before running this script, start VLLM servers with:
     #   bash vllm.bash
-    # This will launch 8 VLLM servers on ports 8000-8007
+    # This will launch VLLM servers based on config.py settings
     
-    # Cache MMLU activations using pre-existing VLLM servers and 8 GPUs for activation extraction
-    cache_mmlu_activations(
-        model_name="google/gemma-3-1b-it",
-        layer_idx=13,
-        num_examples=200,
-        max_new_tokens=100,
-        num_gpus=8
-    )
+    # Cache MMLU activations using pre-existing VLLM servers and GPUs for activation extraction
+    # All parameters default to values in config.py
+    cache_mmlu_activations()
 

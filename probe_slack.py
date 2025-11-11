@@ -1,17 +1,30 @@
-import os; import numpy as np
+"""
+Probe analysis for MMLU activations.
+
+This script trains linear probes to test if a model's internal representations
+contain information about whether it answered correctly or incorrectly.
+"""
+
+import os
+import warnings
+import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_curve, auc
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
+from config import CACHED_ACTIVATIONS_DIR, RESULTS_DIR, MODEL_SHORT_NAME
 
-CACHE_DIR = "cached_activations"
-OUT_DIR = "results"
-os.makedirs(OUT_DIR, exist_ok=True)
-os.makedirs(CACHE_DIR, exist_ok=True)
+# Suppress sklearn convergence warnings for cleaner output
+warnings.filterwarnings('ignore', category=UserWarning, module='sklearn')
+warnings.filterwarnings('ignore', category=RuntimeWarning)
 
-def reduce_dimension(activations, out_dim):
-    pca = PCA(n_components=out_dim)
-    return pca.fit_transform(activations)
+# Ensure directories exist
+os.makedirs(RESULTS_DIR, exist_ok=True)
+os.makedirs(CACHED_ACTIVATIONS_DIR, exist_ok=True)
+
+# ============================================================================
+# Data Loading
+# ============================================================================
 
 def load_mmlu_activations(layer_idx: int, num_examples: int = 1000):
     """Load MMLU cached activations.
@@ -21,446 +34,472 @@ def load_mmlu_activations(layer_idx: int, num_examples: int = 1000):
         num_examples: Number of examples in the cache
 
     Returns:
-        activations: Activation array
+        activations: Activation array (n_samples, n_features)
         labels: Binary labels (1=correct, 0=incorrect)
         subjects: MMLU subjects
         prompts: Question prompts
     """
-    output_prefix = f"mmlu_activations_layer_{layer_idx:02d}_n{num_examples}"
-    activations_file = os.path.join(CACHE_DIR, f"{output_prefix}_activations.npy")
-    labels_file = os.path.join(CACHE_DIR, f"{output_prefix}_labels.npy")
-    subjects_file = os.path.join(CACHE_DIR, f"{output_prefix}_subjects.npy")
-    prompts_file = os.path.join(CACHE_DIR, f"{output_prefix}_prompts.npy")
+    prefix = f"mmlu_activations_layer_{layer_idx:02d}_n{num_examples}"
+    activations_file = os.path.join(CACHED_ACTIVATIONS_DIR, f"{prefix}_activations.npy")
+    labels_file = os.path.join(CACHED_ACTIVATIONS_DIR, f"{prefix}_labels.npy")
+    subjects_file = os.path.join(CACHED_ACTIVATIONS_DIR, f"{prefix}_subjects.npy")
+    prompts_file = os.path.join(CACHED_ACTIVATIONS_DIR, f"{prefix}_prompts.npy")
 
-    print(f"Loading MMLU cached activations from {CACHE_DIR}...")
-    print(f"  Activations: {activations_file}")
-    print(f"  Labels: {labels_file}")
+    print(f"\nLoading activations for {MODEL_SHORT_NAME}")
+    print(f"  Layer: {layer_idx}, Examples: {num_examples}")
+    print(f"  Directory: {CACHED_ACTIVATIONS_DIR}")
 
     if not os.path.exists(activations_file):
-        raise FileNotFoundError(f"Cached activations not found: {activations_file}")
-    if not os.path.exists(labels_file):
-        raise FileNotFoundError(f"Cached labels not found: {labels_file}")
+        raise FileNotFoundError(f"Activations not found: {activations_file}")
 
     activations = np.load(activations_file)
     labels = np.load(labels_file)
     subjects = np.load(subjects_file, allow_pickle=True) if os.path.exists(subjects_file) else None
     prompts = np.load(prompts_file, allow_pickle=True) if os.path.exists(prompts_file) else None
 
-    print(f"  Loaded {activations.shape[0]} samples with {activations.shape[1]} features")
-    print(f"  Correct answers: {np.sum(labels)} ({100*np.sum(labels)/len(labels):.1f}%)")
-    print(f"  Incorrect answers: {len(labels) - np.sum(labels)} ({100*(len(labels)-np.sum(labels))/len(labels):.1f}%)")
-
+    print(f"  Shape: {activations.shape}")
+    print(f"  Correct: {np.sum(labels)}/{len(labels)} ({100*np.sum(labels)/len(labels):.1f}%)")
+    
     return activations, labels, subjects, prompts
 
-def plot_roc_and_density(Xtrain, Ytrain, Xtest, Ytest, fname, train_topics, train_prompts, base_point=None):
-    clf = LogisticRegression(max_iter=1000)
-    clf.fit(Xtrain, Ytrain)
-    y_pred_logits = clf.decision_function(Xtest)
-    fpr, tpr, _ = roc_curve(Ytest, y_pred_logits)
-    auroc = auc(fpr, tpr)
 
-    print(f"AUROC for {fname}: {auroc:.4f}")
-    plt.figure(figsize=(8, 6))
-    plt.plot(fpr, tpr, label=f'ROC curve (AUROC = {auroc:.4f})')
-    plt.plot([0, 1], [0, 1], 'k--', label='Random')
-    plt.xlabel('FPR')
-    plt.ylabel('TPR')
-    plt.title(f'ROC Curve for {fname}')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    if base_point is not None:
-        plt.plot([0,base_point[0],1], [0,base_point[1],1], 'r--', label='labels')
-    filename = f"{OUT_DIR}/roc_{fname}.png"
-    plt.savefig(filename, dpi=150, bbox_inches='tight')
-    plt.close()
+# ============================================================================
+# Core Probe Functions
+# ============================================================================
 
-    plt.figure(figsize=(10, 6))
-    plt.hist(y_pred_logits[Ytest==1], bins=50, alpha=0.6, color='red', label='Class 1', density=True, edgecolor='black', linewidth=0.5)
-    plt.hist(y_pred_logits[Ytest==0], bins=50, alpha=0.6, color='green', label='Class 0', density=True, edgecolor='black', linewidth=0.5)
-    plt.xlabel('Classifier Score', fontsize=12)
-    plt.ylabel('Density', fontsize=12)
-    plt.title(f'Score distribution for {fname}', fontsize=14)
-    plt.legend(fontsize=11)
-    plt.grid(True, alpha=0.3, axis='y')
-    plt.tight_layout()
-    plt.savefig(f"{OUT_DIR}/density_{fname}.png", dpi=150, bbox_inches='tight')
-    plt.close()
-
-    """
-    Please find the 3 lowest, highest and closest to 0 scoring training data points, and print the training data corresponding to them.
-    """
-    # Get scores on training data
-    train_scores = clf.decision_function(Xtrain)
+def train_probe(X_train, y_train, X_test, y_test):
+    """Train a logistic regression probe and compute AUROC.
     
-    # Find indices of 3 lowest scores
-    lowest_indices = np.argsort(train_scores)[:3]
-    
-    # Find indices of 3 highest scores
-    highest_indices = np.argsort(train_scores)[-3:][::-1]
-    
-    # Find indices of 3 closest to 0 scores
-    closest_to_zero_indices = np.argsort(np.abs(train_scores))[:3]
-    
-    # Prepare output text
-    output_lines = []
-    output_lines.append(f"\n{'='*80}")
-    output_lines.append(f"Training Data Analysis for {fname}")
-    output_lines.append(f"{'='*80}")
-    
-    output_lines.append(f"\n3 LOWEST SCORING TRAINING POINTS:")
-    output_lines.append(f"{'-'*80}")
-    for i, idx in enumerate(lowest_indices, 1):
-        output_lines.append(f"\n#{i} - Score: {train_scores[idx]:.4f}, Label: {int(Ytrain[idx])} ({'Class 1' if Ytrain[idx] == 1 else 'Class 0'})")
-        if train_topics is not None:
-            output_lines.append(f"   Metadata: {train_topics[idx]}")
-        if train_prompts is not None:
-            output_lines.append(f"   Prompt: {train_prompts[idx][:100]}...")
-
-    output_lines.append(f"\n3 HIGHEST SCORING TRAINING POINTS:")
-    output_lines.append(f"{'-'*80}")
-    for i, idx in enumerate(highest_indices, 1):
-        output_lines.append(f"\n#{i} - Score: {train_scores[idx]:.4f}, Label: {int(Ytrain[idx])} ({'Class 1' if Ytrain[idx] == 1 else 'Class 0'})")
-        if train_topics is not None:
-            output_lines.append(f"   Metadata: {train_topics[idx]}")
-        if train_prompts is not None:
-            output_lines.append(f"   Prompt: {train_prompts[idx][:100]}...")
-
-    output_lines.append(f"\n3 CLOSEST TO ZERO SCORING TRAINING POINTS:")
-    output_lines.append(f"{'-'*80}")
-    for i, idx in enumerate(closest_to_zero_indices, 1):
-        output_lines.append(f"\n#{i} - Score: {train_scores[idx]:.4f}, Label: {int(Ytrain[idx])} ({'Class 1' if Ytrain[idx] == 1 else 'Class 0'})")
-        if train_topics is not None:
-            output_lines.append(f"   Metadata: {train_topics[idx]}")
-        if train_prompts is not None:
-            output_lines.append(f"   Prompt: {train_prompts[idx][:100]}...")
-    
-    output_lines.append(f"\n{'='*80}\n")
-    
-    # Print to console
-    output_text = '\n'.join(output_lines)
-    print(output_text)
-    
-    # Save to file
-    output_file = f"{OUT_DIR}/training_analysis_{fname}.txt"
-    with open(output_file, 'w') as f:
-        f.write(output_text)
-    print(f"Saved training data analysis to {output_file}")
-    
-    return auroc
-
-def plot_pca_activations(X, Y, fname):
-    pca = PCA(n_components=2)
-    X_pca = pca.fit_transform(X)
-    explained_var = pca.explained_variance_ratio_
-    plt.figure(figsize=(10, 8))
-    plt.scatter(X_pca[Y==1, 0], X_pca[Y==1, 1], c='red', label='Class 1', alpha=0.6, s=100, edgecolors='black', linewidth=0.5)
-    plt.scatter(X_pca[Y==0, 0], X_pca[Y==0, 1], c='green', label='Class 0', alpha=0.6, s=100, edgecolors='black', linewidth=0.5)
-    plt.xlabel(f'PC1 ({explained_var[0]:.1%} variance)', fontsize=12)
-    plt.ylabel(f'PC2 ({explained_var[1]:.1%} variance)', fontsize=12)
-    plt.title(f'PCA of {fname}', fontsize=14)
-    plt.legend(fontsize=11)
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(f"{OUT_DIR}/pca_{fname}.png", dpi=150, bbox_inches='tight')
-    plt.close()
-
-def anomaly_slack(X_train: np.ndarray, train_labels: np.ndarray, X_test: np.ndarray, test_labels: np.ndarray, fname) -> float:
-    """
-    Gaussian anomaly detection model. Fits a Gaussian to training data with label 0,
-    then uses negative log-likelihood as anomaly scores for classification.
-
     Args:
-        X_train: Training activations (n_samples, n_features)
-        train_labels: Training labels (n_samples,) - binary classification
-        X_test: Test activations (n_samples, n_features)
-        test_labels: Test labels (n_samples,)
-        fname: Filename prefix for saving plots
-
+        X_train: Training activations
+        y_train: Training labels
+        X_test: Test activations
+        y_test: Test labels
+        
     Returns:
-        AUROC score
+        auroc: AUROC score
+        clf: Trained classifier
     """
-    print(f"\nPerforming Gaussian anomaly detection...")
-    print(f"Building Gaussian model on class 0 training samples...")
+    clf = LogisticRegression(max_iter=1000, random_state=42)
+    clf.fit(X_train, y_train)
+    
+    y_pred_proba = clf.predict_proba(X_test)[:, 1]
+    fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
+    auroc = auc(fpr, tpr)
+    
+    return auroc, clf
 
-    # Filter training data to only label 0
-    X_train_normal = X_train[train_labels == 0]
 
-    print(f"  Using {X_train_normal.shape[0]} class 0 training samples")
-    print(f"  Feature dimension: {X_train_normal.shape[1]}")
+def anomaly_detection(X_train, y_train, X_test, y_test):
+    """Gaussian anomaly detection: fit Gaussian to class 0, detect class 1 as anomalies.
     
-    # Fit a multivariate Gaussian: estimate mean and covariance
-    mean = np.mean(X_train_normal, axis=0)
+    Args:
+        X_train: Training activations
+        y_train: Training labels
+        X_test: Test activations
+        y_test: Test labels
+        
+    Returns:
+        auroc: AUROC score
+        anomaly_scores: Anomaly scores for test set
+    """
+    # Fit Gaussian to "incorrect" answers (class 0)
+    X_normal = X_train[y_train == 0]
+    mean = np.mean(X_normal, axis=0)
+    cov = np.cov(X_normal, rowvar=False)
     
-    # Compute covariance matrix with regularization for numerical stability
-    cov = np.cov(X_train_normal, rowvar=False)
-    
-    # Add regularization to diagonal (helps with numerical stability)
+    # Add regularization for numerical stability
     epsilon = 1e-6
     cov += epsilon * np.eye(cov.shape[0])
     
-    print(f"  Computed mean vector and covariance matrix")
-    
-    # Compute log probability density for test samples
-    # For multivariate Gaussian: log p(x) = -0.5 * [(x-mu)^T * Sigma^-1 * (x-mu) + log|Sigma| + d*log(2*pi)]
-    # We'll use the negative log-likelihood as the anomaly score (higher = more anomalous)
-    
     try:
-        # Compute inverse covariance (precision matrix)
         cov_inv = np.linalg.inv(cov)
-        
-        # Compute log determinant
         sign, logdet = np.linalg.slogdet(cov)
+        
         if sign <= 0:
-            print("  Warning: Covariance matrix is not positive definite, using regularization")
             cov += epsilon * 10 * np.eye(cov.shape[0])
             cov_inv = np.linalg.inv(cov)
             sign, logdet = np.linalg.slogdet(cov)
         
-        # Compute anomaly scores for test data
-        # anomaly_score = -log p(x) (higher = more anomalous = more likely math)
+        # Compute Mahalanobis distance as anomaly score
         X_centered = X_test - mean
         mahalanobis_sq = np.sum(X_centered @ cov_inv * X_centered, axis=1)
-        
         d = X_test.shape[1]
         log_likelihood = -0.5 * (mahalanobis_sq + logdet + d * np.log(2 * np.pi))
-        anomaly_scores = -log_likelihood  # Negative log-likelihood as anomaly score
+        anomaly_scores = -log_likelihood
         
-        print(f"  Computed anomaly scores for {X_test.shape[0]} test samples")
-        
-    except np.linalg.LinAlgError as e:
-        print(f"  Error inverting covariance matrix: {e}")
-        print("  Using simplified Euclidean distance to mean as anomaly score")
+    except np.linalg.LinAlgError:
+        # Fallback to Euclidean distance
         anomaly_scores = np.linalg.norm(X_test - mean, axis=1)
     
-    # Compute ROC curve and AUROC
-    # test_labels: 0 = non-math (normal), 1 = math (anomaly)
-    # anomaly_scores: higher values should correspond to math (label 1)
-    fpr, tpr, thresholds = roc_curve(test_labels, anomaly_scores)
+    fpr, tpr, _ = roc_curve(y_test, anomaly_scores)
     auroc = auc(fpr, tpr)
     
-    print(f"Gaussian Anomaly Detection AUROC: {auroc:.4f}")
-    
-    # Save ROC curve
+    return auroc, anomaly_scores
+
+
+# ============================================================================
+# Visualization Functions
+# ============================================================================
+
+def plot_roc_curve(fpr, tpr, auroc, fname, title="ROC Curve"):
+    """Plot ROC curve."""
     plt.figure(figsize=(8, 6))
-    plt.plot(fpr, tpr, label=f'ROC curve (AUROC = {auroc:.4f})')
-    plt.plot([0, 1], [0, 1], 'k--', label='Random')
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title(f'ROC Curve - Gaussian Anomaly Detection')
-    plt.legend()
+    plt.plot(fpr, tpr, label=f'AUROC = {auroc:.4f}', linewidth=2)
+    plt.plot([0, 1], [0, 1], 'k--', label='Random', alpha=0.5)
+    plt.xlabel('False Positive Rate', fontsize=12)
+    plt.ylabel('True Positive Rate', fontsize=12)
+    plt.title(title, fontsize=14)
+    plt.legend(fontsize=11)
     plt.grid(True, alpha=0.3)
-    
-    plt.savefig(f"{OUT_DIR}/roc_anomaly_{fname}.png", dpi=150, bbox_inches='tight')
-    print(f"Saved Gaussian anomaly detection ROC curve to {OUT_DIR}/roc_{fname}.png")
+    plt.tight_layout()
+    plt.savefig(f"{RESULTS_DIR}/{fname}.png", dpi=150, bbox_inches='tight')
     plt.close()
+
+
+def plot_score_distribution(scores, labels, fname, title="Score Distribution"):
+    """Plot distribution of classifier scores."""
+    plt.figure(figsize=(10, 6))
+    plt.hist(scores[labels==1], bins=50, alpha=0.6, color='red', 
+             label='Correct (Class 1)', density=True, edgecolor='black', linewidth=0.5)
+    plt.hist(scores[labels==0], bins=50, alpha=0.6, color='green',
+             label='Incorrect (Class 0)', density=True, edgecolor='black', linewidth=0.5)
+    plt.xlabel('Classifier Score', fontsize=12)
+    plt.ylabel('Density', fontsize=12)
+    plt.title(title, fontsize=14)
+    plt.legend(fontsize=11)
+    plt.grid(True, alpha=0.3, axis='y')
+    plt.tight_layout()
+    plt.savefig(f"{RESULTS_DIR}/{fname}.png", dpi=150, bbox_inches='tight')
+    plt.close()
+
+
+def plot_pca(X, y, fname, title="PCA Visualization"):
+    """Plot PCA projection of activations."""
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(X)
+    explained_var = pca.explained_variance_ratio_
+    
+    plt.figure(figsize=(10, 8))
+    plt.scatter(X_pca[y==0, 0], X_pca[y==0, 1], c='green', label='Incorrect (0)', 
+                alpha=0.6, s=100, edgecolors='black', linewidth=0.5)
+    plt.scatter(X_pca[y==1, 0], X_pca[y==1, 1], c='red', label='Correct (1)',
+                alpha=0.6, s=100, edgecolors='black', linewidth=0.5)
+    plt.xlabel(f'PC1 ({explained_var[0]:.1%} variance)', fontsize=12)
+    plt.ylabel(f'PC2 ({explained_var[1]:.1%} variance)', fontsize=12)
+    plt.title(title, fontsize=14)
+    plt.legend(fontsize=11)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"{RESULTS_DIR}/{fname}.png", dpi=150, bbox_inches='tight')
+    plt.close()
+
+
+def save_training_analysis(clf, X_train, y_train, subjects, prompts, fname):
+    """Analyze and save information about extreme training examples."""
+    train_scores = clf.decision_function(X_train)
+    
+    # Find extreme examples
+    lowest_idx = np.argsort(train_scores)[:3]
+    highest_idx = np.argsort(train_scores)[-3:][::-1]
+    closest_idx = np.argsort(np.abs(train_scores))[:3]
+    
+    lines = [
+        f"\n{'='*80}",
+        f"Training Data Analysis: {fname}",
+        f"{'='*80}",
+        f"\n3 LOWEST SCORING (most confident INCORRECT):",
+        f"{'-'*80}"
+    ]
+    
+    for i, idx in enumerate(lowest_idx, 1):
+        lines.append(f"\n#{i} - Score: {train_scores[idx]:.4f}, "
+                    f"Label: {int(y_train[idx])} ({'Correct' if y_train[idx] else 'Incorrect'})")
+        if subjects is not None:
+            lines.append(f"   Subject: {subjects[idx]}")
+        if prompts is not None:
+            lines.append(f"   Prompt: {prompts[idx][:150]}...")
+    
+    lines.extend([f"\n3 HIGHEST SCORING (most confident CORRECT):", f"{'-'*80}"])
+    
+    for i, idx in enumerate(highest_idx, 1):
+        lines.append(f"\n#{i} - Score: {train_scores[idx]:.4f}, "
+                    f"Label: {int(y_train[idx])} ({'Correct' if y_train[idx] else 'Incorrect'})")
+        if subjects is not None:
+            lines.append(f"   Subject: {subjects[idx]}")
+        if prompts is not None:
+            lines.append(f"   Prompt: {prompts[idx][:150]}...")
+    
+    lines.extend([f"\n3 CLOSEST TO ZERO (most uncertain):", f"{'-'*80}"])
+    
+    for i, idx in enumerate(closest_idx, 1):
+        lines.append(f"\n#{i} - Score: {train_scores[idx]:.4f}, "
+                    f"Label: {int(y_train[idx])} ({'Correct' if y_train[idx] else 'Incorrect'})")
+        if subjects is not None:
+            lines.append(f"   Subject: {subjects[idx]}")
+        if prompts is not None:
+            lines.append(f"   Prompt: {prompts[idx][:150]}...")
+    
+    lines.append(f"\n{'='*80}\n")
+    
+    # Save to file
+    output_file = f"{RESULTS_DIR}/training_analysis_{fname}.txt"
+    with open(output_file, 'w') as f:
+        f.write('\n'.join(lines))
+
+
+# ============================================================================
+# Experiment Functions
+# ============================================================================
+
+def experiment_basic_probe(X_train, y_train, X_test, y_test, subjects, prompts, fname):
+    """Run basic linear probe experiment."""
+    print(f"\n{'='*60}")
+    print(f"Basic Linear Probe: {fname}")
+    print(f"{'='*60}")
+    
+    auroc, clf = train_probe(X_train, y_train, X_test, y_test)
+    print(f"  AUROC: {auroc:.4f}")
+    
+    # Get predictions
+    y_pred_proba = clf.predict_proba(X_test)[:, 1]
+    fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
+    
+    # Visualizations
+    plot_roc_curve(fpr, tpr, auroc, f"roc_{fname}", f"ROC Curve - {fname}")
+    plot_score_distribution(clf.decision_function(X_test), y_test, 
+                          f"density_{fname}", f"Score Distribution - {fname}")
+    save_training_analysis(clf, X_train, y_train, subjects, prompts, fname)
+    
     return auroc
 
-def compute_auroc(Xtrain, Ytrain, Xtest, Ytest):
-    clf = LogisticRegression(max_iter=100)
-    clf.fit(Xtrain, Ytrain)
-    y_pred_proba = clf.predict_proba(Xtest)[:, 1]
-    fpr, tpr, _ = roc_curve(Ytest, y_pred_proba)
-    return auc(fpr, tpr)
 
-def plot_auroc_vs_n(activations, labels, fname, n_trials=10):
-    """Plot 1-AUROC vs N where N is number of training samples."""
-    n_values = [2**i for i in range(2, 11)]  # 16 to 1024
+def experiment_anomaly_detection(X_train, y_train, X_test, y_test, fname):
+    """Run Gaussian anomaly detection experiment."""
+    print(f"\n{'='*60}")
+    print(f"Anomaly Detection: {fname}")
+    print(f"{'='*60}")
+    
+    auroc, anomaly_scores = anomaly_detection(X_train, y_train, X_test, y_test)
+    print(f"  AUROC: {auroc:.4f}")
+    
+    fpr, tpr, _ = roc_curve(y_test, anomaly_scores)
+    plot_roc_curve(fpr, tpr, auroc, f"roc_anomaly_{fname}", 
+                  f"Anomaly Detection ROC - {fname}")
+    
+    return auroc
+
+
+def experiment_label_corruption(X_train, y_train, X_test, y_test, subjects, prompts, fname):
+    """Run label corruption robustness experiment."""
+    print(f"\n{'='*60}")
+    print(f"Label Corruption Experiment: {fname}")
+    print(f"{'='*60}")
+    
+    # Keep first 100 positive examples and all negative examples
+    pos_idx = np.where(y_train == 1)[0][:100]
+    neg_idx = np.where(y_train == 0)[0]
+    
+    # Corrupt 10% of negative labels
+    np.random.shuffle(neg_idx)
+    n_corrupt = int(0.1 * len(neg_idx))
+    
+    # Build corrupted training set
+    keep_idx = np.concatenate([pos_idx, neg_idx])
+    X_train_corrupt = X_train[keep_idx]
+    y_train_corrupt = y_train[keep_idx].copy()
+    
+    # Flip first n_corrupt negative examples to positive
+    neg_mask = y_train_corrupt == 0
+    neg_positions = np.where(neg_mask)[0]
+    y_train_corrupt[neg_positions[:n_corrupt]] = 1
+    
+    # Get corresponding metadata
+    subjects_corrupt = subjects[keep_idx] if subjects is not None else None
+    prompts_corrupt = prompts[keep_idx] if prompts is not None else None
+    
+    # Train probe on corrupted data
+    auroc = experiment_basic_probe(X_train_corrupt, y_train_corrupt, X_test, y_test,
+                                   subjects_corrupt, prompts_corrupt, f"corrupted_{fname}")
+    
+    return auroc
+
+
+def experiment_auroc_vs_n(activations, labels, fname, n_trials=10):
+    """Measure how AUROC varies with training set size."""
+    print(f"\n{'='*60}")
+    print(f"AUROC vs Training Set Size: {fname}")
+    print(f"{'='*60}")
+    
+    n_values = [2**i for i in range(4, 8)]  # 16, 32, 64, 128
     results = {n: [] for n in n_values}
     
     for n in n_values:
-        for trial in range(n_trials):
+        print(f"  Testing N={n}...", end=' ')
+        for _ in range(n_trials):
+            # Random split
             idx = np.random.permutation(len(activations))
-            activations_shuffled = activations[idx]
-            labels_shuffled = labels[idx]
             
-            Xtrain = activations_shuffled[:n]
-            Ytrain = labels_shuffled[:n]
-            Xtest = activations_shuffled[n:]
-            Ytest = labels_shuffled[n:]
+            X_train = activations[idx[:n]]
+            y_train = labels[idx[:n]]
+            X_test = activations[idx[n:]]
+            y_test = labels[idx[n:]]
             
-            if len(Xtest) > 0 and len(np.unique(Ytrain)) > 1:
-                auroc = compute_auroc(Xtrain, Ytrain, Xtest, Ytest)
-                results[n].append(1 - auroc)
+            # Need both classes in training set
+            if len(X_test) > 0 and len(np.unique(y_train)) > 1:
+                auroc, _ = train_probe(X_train, y_train, X_test, y_test)
+                results[n].append(1 - auroc)  # Plot error rate
+        
+        if results[n]:
+            print(f"Error: {np.mean(results[n]):.4f} ± {np.std(results[n]):.4f}")
     
-    means = [np.mean(results[n]) for n in n_values]
-    stds = [np.std(results[n]) for n in n_values]
+    # Plot
+    means = [np.mean(results[n]) if results[n] else np.nan for n in n_values]
+    stds = [np.std(results[n]) if results[n] else 0 for n in n_values]
     
     plt.figure(figsize=(10, 6))
     plt.errorbar(n_values, means, yerr=stds, marker='o', capsize=5, linewidth=2, markersize=8)
     plt.xscale('log')
     plt.xticks(n_values, [str(n) for n in n_values])
-    plt.xlabel('N (training samples)', fontsize=12)
-    plt.ylabel('1 - AUROC', fontsize=12)
-    plt.title('Model Error vs Training Set Size', fontsize=14)
+    plt.xlabel('Training Set Size (N)', fontsize=12)
+    plt.ylabel('Error (1 - AUROC)', fontsize=12)
+    plt.title('Probe Error vs Training Set Size', fontsize=14)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(f"{OUT_DIR}/auroc_vs_n_{fname}.png", dpi=150, bbox_inches='tight')
+    plt.savefig(f"{RESULTS_DIR}/auroc_vs_n_{fname}.png", dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"Saved AUROC vs N plot to {OUT_DIR}/auroc_vs_n_{fname}.png")
 
-def plot_label_corruption(Xtrain, Ytrain, Xtest, Ytest, fname, n_trials=5):
-    """Plot 1-AUROC vs epsilon for label corruption experiment."""
+
+def experiment_label_corruption_sweep(activations, labels, fname, n_trials=5):
+    """Measure robustness to different levels of label corruption."""
+    print(f"\n{'='*60}")
+    print(f"Label Corruption Sweep: {fname}")
+    print(f"{'='*60}")
+    
     epsilons = [0.001, 0.005, 0.01, 0.05, 0.1, 0.2]
-    n_pos = 10
+    n_train = min(200, len(labels) // 2)  # Use half for training
+    n_pos = max(10, int(0.1 * n_train))   # Keep 10% positive examples
+    
     results = {eps: [] for eps in epsilons}
     
-    pos_idx = np.where(Ytrain == 1)[0]
-    neg_idx = np.where(Ytrain == 0)[0]
+    pos_idx = np.where(labels == 1)[0]
+    neg_idx = np.where(labels == 0)[0]
     
     for eps in epsilons:
-        for trial in range(n_trials):
+        print(f"  Testing ε={eps}...", end=' ')
+        for _ in range(n_trials):
             np.random.shuffle(pos_idx)
             np.random.shuffle(neg_idx)
-            n_corrupt = int(eps * len(neg_idx))
-            n_clean_neg = len(neg_idx) - n_corrupt
+            
+            # Calculate splits
+            n_corrupt = int(eps * n_train)
+            n_clean_neg = n_train - n_pos - n_corrupt
+            
+            if n_clean_neg < 0:
+                continue
+            
+            # Build corrupted training set
             train_pos = pos_idx[:n_pos]
             train_corrupt_neg = neg_idx[:n_corrupt]
             train_clean_neg = neg_idx[n_corrupt:n_corrupt + n_clean_neg]
-            Xtrain_corrupted = np.vstack([
-                Xtrain[train_pos],
-                Xtrain[train_corrupt_neg],
-                Xtrain[train_clean_neg]
+            
+            X_train = np.vstack([
+                activations[train_pos],
+                activations[train_corrupt_neg],
+                activations[train_clean_neg]
             ])
-            Ytrain_corrupted = np.concatenate([
+            y_train = np.concatenate([
                 np.ones(n_pos),
-                np.ones(n_corrupt),  # Mislabeled as positive
+                np.ones(n_corrupt),  # Corrupted: labeled as 1
                 np.zeros(n_clean_neg)
             ])
             
-            auroc = compute_auroc(Xtrain_corrupted, Ytrain_corrupted, Xtest, Ytest)
-            results[eps].append(1 - auroc)
+            # Test set: remaining examples
+            test_idx = np.concatenate([
+                pos_idx[n_pos:],
+                neg_idx[n_corrupt + n_clean_neg:]
+            ])
+            X_test = activations[test_idx]
+            y_test = labels[test_idx]
+            
+            if len(X_test) > 0:
+                auroc, _ = train_probe(X_train, y_train, X_test, y_test)
+                results[eps].append(1 - auroc)
+        
+        if results[eps]:
+            print(f"Error: {np.mean(results[eps]):.4f} ± {np.std(results[eps]):.4f}")
     
-    means = [np.mean(results[eps]) for eps in epsilons]
-    stds = [np.std(results[eps]) for eps in epsilons]
+    # Plot
+    means = [np.mean(results[eps]) if results[eps] else np.nan for eps in epsilons]
+    stds = [np.std(results[eps]) if results[eps] else 0 for eps in epsilons]
     
     plt.figure(figsize=(10, 6))
     plt.errorbar(epsilons, means, yerr=stds, marker='o', capsize=5, linewidth=2, markersize=8)
     plt.xscale('log')
-    plt.xlabel('ε - Label Corruption Rate', fontsize=12)
-    plt.ylabel('1 - AUROC', fontsize=12)
-    plt.title('Model Error vs Label Corruption', fontsize=14)
+    plt.xlabel('Label Corruption Rate (ε)', fontsize=12)
+    plt.ylabel('Error (1 - AUROC)', fontsize=12)
+    plt.title('Probe Robustness to Label Corruption', fontsize=14)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(f"{OUT_DIR}/label_corruption_{fname}.png", dpi=150, bbox_inches='tight')
+    plt.savefig(f"{RESULTS_DIR}/label_corruption_{fname}.png", dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"Saved label corruption plot to {OUT_DIR}/label_corruption_{fname}.png")
 
-def plot_corruption_heatmap(activations, labels, fname, n_trials=5):
-    """Plot lines of 1-AUROC vs epsilon for different N values."""
-    epsilons = [0.001, 0.005, 0.01, 0.05, 0.1, 0.2]
-    n_values = [2**i for i in range(5, 11)]
-    pos_frac = .1
-    results_by_n = {n: {eps: [] for eps in epsilons} for n in n_values}
-    pos_idx = np.where(labels == 1)[0]
-    neg_idx = np.where(labels == 0)[0]
-    for n_train in n_values:
-        for eps in epsilons:
-            errors = []
-            for _ in range(n_trials):
-                np.random.shuffle(pos_idx)
-                np.random.shuffle(neg_idx)
 
-                n_pos = int(pos_frac * n_train)
-                n_corrupt = int(eps * n_train)
-                n_clean_neg = n_train - n_corrupt
-                
-                train_pos = pos_idx[:n_pos]
-                train_corrupt_neg = neg_idx[:n_corrupt]
-                train_clean_neg = neg_idx[n_corrupt:n_corrupt + n_clean_neg]
-                
-                Xtrain = np.vstack([ activations[train_pos], activations[train_corrupt_neg], activations[train_clean_neg] ])
-                Ytrain = np.concatenate([ np.ones(n_pos), np.ones(n_corrupt), np.zeros(n_clean_neg) ])
-                
-                test_idx = np.concatenate([pos_idx[n_pos:], neg_idx[n_corrupt + n_clean_neg:]])
-                Xtest = activations[test_idx]
-                Ytest = labels[test_idx]
-                auroc = compute_auroc(Xtrain, Ytrain, Xtest, Ytest)
-                errors.append(1 - auroc)
-            if errors:
-                results_by_n[n_train][eps] = errors
+# ============================================================================
+# Main Analysis Pipeline
+# ============================================================================
+
+def run_full_analysis(layer=13, num_examples=200):
+    """Run complete analysis pipeline on MMLU activations.
     
-    # Create line plot
-    plt.figure(figsize=(12, 8))
-    for n_train in n_values:
-        means = [np.mean(results_by_n[n_train][eps]) if results_by_n[n_train][eps] else np.nan for eps in epsilons]
-        stds = [np.std(results_by_n[n_train][eps]) if results_by_n[n_train][eps] else 0 for eps in epsilons]
-        plt.errorbar(epsilons, means, yerr=stds, marker='o', capsize=5, linewidth=2, markersize=8, label=f'N={n_train}')
+    Args:
+        layer: Layer index to analyze
+        num_examples: Number of examples to use
+    """
+    print(f"\n{'#'*80}")
+    print(f"# PROBE SLACK ANALYSIS")
+    print(f"# Model: {MODEL_SHORT_NAME}")
+    print(f"# Layer: {layer}, Examples: {num_examples}")
+    print(f"{'#'*80}")
     
-    plt.xscale('log')
-    plt.xlabel('ε (corruption rate)', fontsize=12)
-    plt.ylabel('1 - AUROC', fontsize=12)
-    plt.title('Model Error vs Label Corruption for Different Training Set Sizes', fontsize=14)
-    plt.legend(fontsize=11)
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(f"{OUT_DIR}/corruption_heatmap_{fname}.png", dpi=150, bbox_inches='tight')
-    plt.close()
-    print(f"Saved corruption line plot to {OUT_DIR}/corruption_heatmap_{fname}.png")
-
-def makeplots_mmlu(layer, num_examples=1000, reduce_dim=None):
-    """Run analysis on MMLU activations."""
+    # Load data
     activations, labels, subjects, prompts = load_mmlu_activations(layer, num_examples)
+    
+    # Shuffle for random split
     idx = np.random.permutation(len(activations))
     activations = activations[idx]
     labels = labels[idx]
     subjects = subjects[idx] if subjects is not None else None
     prompts = prompts[idx] if prompts is not None else None
-
-    Xtrain = activations[:len(activations)//2]
-    Xtest = activations[len(activations)//2:]
-
-    if reduce_dim is not None:
-        Xtrain = reduce_dimension(Xtrain, reduce_dim)
-        Xtest = reduce_dimension(Xtest, reduce_dim)
-
-    Ytrain = labels[:len(labels)//2]
-    Ytest = labels[len(labels)//2:]
-
-    train_subjects = subjects[:len(subjects)//2] if subjects is not None else None
-    train_prompts = prompts[:len(prompts)//2] if prompts is not None else None
-
+    
+    # Split train/test
+    split = len(activations) // 2
+    X_train, X_test = activations[:split], activations[split:]
+    y_train, y_test = labels[:split], labels[split:]
+    train_subjects = subjects[:split] if subjects is not None else None
+    train_prompts = prompts[:split] if prompts is not None else None
+    
     fname = f"mmlu_layer{layer}_n{num_examples}"
-    if reduce_dim is not None:
-        fname += f"_reducedim{reduce_dim}"
-    plot_roc_and_density(Xtrain, Ytrain, Xtest, Ytest, fname, train_subjects, train_prompts)
-    plot_pca_activations(Xtest, Ytest, fname)
-    anomaly_slack(Xtrain, Ytrain, Xtest, Ytest, fname)
-
-    # Label corruption experiment
-    class1_indices = np.where(Ytrain == 1)[0]
-    class0_indices = np.where(Ytrain == 0)[0]
-
-    if len(class1_indices) > 100:
-        np.random.shuffle(class1_indices)
-        class1_indices = class1_indices[:100]
-
-    kept_indices = np.concatenate([class1_indices, class0_indices])
-    Xtrain_corrupted = Xtrain[kept_indices]
-    Ytrain_corrupted = Ytrain[kept_indices].copy()
-    train_subjects_corrupted = train_subjects[kept_indices] if train_subjects is not None else None
-    train_prompts_corrupted = train_prompts[kept_indices] if train_prompts is not None else None
-
-    # Flip 10% of the 0 labels to 1s
-    class0_mask = Ytrain_corrupted == 0
-    class0_count = np.sum(class0_mask)
-    flip_count = int(0.1 * class0_count)
-    class0_positions = np.where(class0_mask)[0]
-    np.random.shuffle(class0_positions)
-    flip_positions = class0_positions[:flip_count]
-    Ytrain_corrupted[flip_positions] = 1
-
-    plot_roc_and_density(Xtrain_corrupted, Ytrain_corrupted, Xtest, Ytest, "corrupted_" + fname, train_subjects_corrupted, train_prompts_corrupted, base_point=(.1,1))
-
-    print("\nGenerating AUROC vs N plot...")
-    plot_auroc_vs_n(activations, labels, fname)
-    print("\nGenerating label corruption plot...")
-    plot_label_corruption(Xtrain, Ytrain, Xtest, Ytest, fname)
-    print("\nGenerating corruption heatmap...")
-    plot_corruption_heatmap(activations, labels, fname)
-
+    
+    # Run experiments
+    experiment_basic_probe(X_train, y_train, X_test, y_test, 
+                          train_subjects, train_prompts, fname)
+    
+    plot_pca(X_test, y_test, f"pca_{fname}", f"PCA - {fname}")
+    
+    experiment_anomaly_detection(X_train, y_train, X_test, y_test, fname)
+    
+    experiment_label_corruption(X_train, y_train, X_test, y_test,
+                               train_subjects, train_prompts, fname)
+    
+    experiment_auroc_vs_n(activations, labels, fname)
+    
+    experiment_label_corruption_sweep(activations, labels, fname)
+    
+    print(f"\n{'#'*80}")
+    print(f"# Analysis complete! Results saved to: {RESULTS_DIR}")
+    print(f"{'#'*80}\n")
 
 
 if __name__ == "__main__":
-    # Example: Run analysis on MMLU activations
-    # Uncomment to run:
-    makeplots_mmlu(layer=13, num_examples=200)
+    run_full_analysis(layer=13, num_examples=200)

@@ -11,6 +11,8 @@ from openai import AsyncOpenAI
 import argparse
 from tqdm.asyncio import tqdm
 
+DATASET_NAME = "high_school_government_and_politics"
+
 # Baseline prompt that encourages thinking and boxed answer
 BASELINE_PROMPT = """Think about the following question and provide your reasoning, then box your final answer using \\box{{}}.
 
@@ -39,10 +41,10 @@ C. {choice_c}
 D. {choice_d}"""
 
 
-def load_mmlu_biology():
-    """Load the high_school_biology subset of MMLU."""
-    print("Loading MMLU high_school_biology dataset...")
-    dataset = load_dataset("cais/mmlu", "high_school_government_and_politics")
+def load_mmlu_subset():
+    """Load the MMLU subset."""
+    print(f"Loading MMLU {DATASET_NAME} subset...")
+    dataset = load_dataset("cais/mmlu", DATASET_NAME)
     return dataset
 
 
@@ -210,7 +212,7 @@ async def main_async(args):
     )
 
     # Load dataset
-    dataset = load_mmlu_biology()
+    dataset = load_mmlu_subset()
     dataset_split = dataset[args.split]
 
     print(f"\n{'='*60}")

@@ -3,5 +3,18 @@ mmlu_data/
 venv/
 venv
 env/
-# cached_activations/
-# results
+
+# Experiment outputs (model-specific)
+experiments/
+
+# Legacy directories (kept for backward compatibility)
+cached_activations/
+results/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# scratch
+scratch/
