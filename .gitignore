@@ -3,6 +3,5 @@ mmlu_data/
 venv/
 venv
 env/
-cached_activations/
-cached_activations
-results
+# cached_activations/
+# results

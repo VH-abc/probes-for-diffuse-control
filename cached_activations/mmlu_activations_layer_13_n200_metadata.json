@@ -1,0 +1,24 @@
+{
+  "model_name": "google/gemma-3-1b-it",
+  "layer_idx": 13,
+  "num_examples": 200,
+  "max_new_tokens": 100,
+  "activation_shape": [
+    200,
+    1152
+  ],
+  "num_correct": 101,
+  "num_incorrect": 99,
+  "accuracy": 0.505,
+  "description": "MMLU activations collected on final non-EOS token after autoregressive generation. Labels are binary: 1=correct answer, 0=incorrect answer (including unparseable).",
+  "files": {
+    "activations": "cached_activations/mmlu_activations_layer_13_n200_activations.npy",
+    "labels": "cached_activations/mmlu_activations_layer_13_n200_labels.npy",
+    "subjects": "cached_activations/mmlu_activations_layer_13_n200_subjects.npy",
+    "prompts": "cached_activations/mmlu_activations_layer_13_n200_prompts.npy",
+    "questions": "cached_activations/mmlu_activations_layer_13_n200_questions.json",
+    "generated_texts": "cached_activations/mmlu_activations_layer_13_n200_generated.npy",
+    "predicted_answers": "cached_activations/mmlu_activations_layer_13_n200_predicted_answers.npy",
+    "correct_answer_indices": "cached_activations/mmlu_activations_layer_13_n200_correct_answer_indices.npy"
+  }
+}
