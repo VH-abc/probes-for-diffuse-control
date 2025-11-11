@@ -1,10 +1,13 @@
 import torch
 import numpy as np
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from vllm import LLM, SamplingParams
 import argparse
 import os
 import json
 from typing import List, Tuple, Any, Dict
+from multiprocessing import Pool, set_start_method
+import torch.multiprocessing as mp
 OUT_DIR = "cached_activations"
 
 
@@ -85,66 +88,126 @@ def extract_answer_from_generation(generated_text: str) -> str:
     return None
 
 
-def get_activations_with_generation(
-    model: Any,
-    tokenizer: Any,
+def generate_with_vllm_single_gpu(args):
+    """Worker function to generate completions on a single GPU."""
+    gpu_id, model_name, prompts, max_new_tokens, temperature = args
+    
+    print(f"[GPU {gpu_id}] Initializing VLLM with {len(prompts)} prompts...")
+    
+    # Set CUDA device for this process
+    os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
+    
+    llm = LLM(model=model_name, dtype="bfloat16", max_model_len=2048, gpu_memory_utilization=0.9)
+
+    sampling_params = SamplingParams(
+        temperature=temperature,
+        max_tokens=max_new_tokens,
+        skip_special_tokens=True
+    )
+    
+    print(f"[GPU {gpu_id}] Generating completions...")
+    outputs = llm.generate(prompts, sampling_params)
+    
+    # Extract the full text (prompt + completion)
+    generated_texts = [output.outputs[0].text for output in outputs]
+    
+    # Concatenate prompt with generated completion to get full text
+    full_texts = [prompt + generated for prompt, generated in zip(prompts, generated_texts)]
+    
+    print(f"[GPU {gpu_id}] Generation complete!")
+    return full_texts
+
+
+def generate_with_vllm_multi_gpu(
+    model_name: str,
     prompts: List[str],
-    layer_idx: int,
-    device: str = "cuda" if torch.cuda.is_available() else "cpu",
-    max_new_tokens: int = 100
-) -> Tuple[np.ndarray, List[str]]:
+    max_new_tokens: int = 100,
+    temperature: float = 0.0,
+    num_gpus: int = 8
+) -> List[str]:
     """
-    Get activations from a specific layer for a list of prompts after autoregressive generation.
-    Returns activations at the final non-EOS token position.
+    Generate completions using multiple VLLM instances across GPUs.
 
     Args:
-        model: The language model
-        tokenizer: The tokenizer
+        model_name: Name of the model to use
         prompts: List of prompts to generate from
-        layer_idx: Which layer to extract activations from
-        device: Device to run on
         max_new_tokens: Maximum number of new tokens to generate
+        temperature: Sampling temperature (0.0 for greedy decoding)
+        num_gpus: Number of GPUs to use
 
     Returns:
-        activations: Array of activations (num_prompts, hidden_dim)
-        generated_texts: List of generated text completions
+        generated_texts: List of full generated text (prompt + completion)
     """
+    print(f"\n{'='*60}")
+    print(f"Distributing {len(prompts)} prompts across {num_gpus} GPUs for VLLM generation")
+    print(f"{'='*60}")
+    
+    # Split prompts into chunks for each GPU
+    chunk_size = (len(prompts) + num_gpus - 1) // num_gpus
+    prompt_chunks = [prompts[i:i + chunk_size] for i in range(0, len(prompts), chunk_size)]
+    
+    print(f"Chunk sizes: {[len(chunk) for chunk in prompt_chunks]}")
+    
+    # Prepare arguments for each GPU
+    args_list = [
+        (gpu_id, model_name, chunk, max_new_tokens, temperature)
+        for gpu_id, chunk in enumerate(prompt_chunks)
+    ]
+    
+    # Use multiprocessing to run VLLM on each GPU
+    with Pool(processes=num_gpus) as pool:
+        results = pool.map(generate_with_vllm_single_gpu, args_list)
+    
+    # Flatten results back into single list
+    full_texts = []
+    for result in results:
+        full_texts.extend(result)
+    
+    print(f"\nAll GPUs completed generation! Total: {len(full_texts)} texts")
+    return full_texts
+
+
+def extract_activations_single_gpu(args):
+    """Worker function to extract activations on a single GPU."""
+    gpu_id, model_name, full_texts, layer_idx = args
+    
+    print(f"[GPU {gpu_id}] Loading model for activation extraction ({len(full_texts)} texts)...")
+    
+    # Set device for this process
+    device = f"cuda:{gpu_id}"
+    
+    # Load tokenizer and model
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.bfloat16,
+        device_map=device,
+        attn_implementation="eager"
+    )
+    
+    if hasattr(model, "config"):
+        model.config.use_cache = False
+    
     model.eval()
     activations_list = []
-    generated_texts = []
-
+    
+    print(f"[GPU {gpu_id}] Extracting activations from layer {layer_idx}...")
+    
     with torch.no_grad():
-        for i, prompt in enumerate(prompts):
-            if (i + 1) % 10 == 0 or i + 1 == len(prompts):
-                print(f"  Processing {i + 1}/{len(prompts)} prompts...")
+        for i, full_text in enumerate(full_texts):
+            if (i + 1) % 10 == 0 or i + 1 == len(full_texts):
+                print(f"  [GPU {gpu_id}] Processing {i + 1}/{len(full_texts)}...")
 
-            # Tokenize the prompt
-            inputs = tokenizer(prompt, return_tensors="pt").to(device)
-
-            # Do autoregressive generation
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                output_hidden_states=True,
-                return_dict_in_generate=True,
-                do_sample=False,  # Use greedy decoding for consistency
-                pad_token_id=tokenizer.eos_token_id
-            )
-
-            # Get the generated sequence
-            generated_ids = outputs.sequences[0]
-
-            # Decode the generated text
-            generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
-            generated_texts.append(generated_text)
+            # Tokenize the full generated text
+            inputs = tokenizer(full_text, return_tensors="pt").to(device)
+            input_ids = inputs.input_ids[0]
 
             # Find the position of the final non-EOS token
-            # We need to identify where the EOS token is (if present) and use the token before it
             special_token_ids = set(getattr(tokenizer, "all_special_ids", []))
 
             # Find all non-special token positions
             non_special_positions = [
-                idx for idx, token_id in enumerate(generated_ids.tolist())
+                idx for idx, token_id in enumerate(input_ids.tolist())
                 if int(token_id) not in special_token_ids
             ]
 
@@ -152,75 +215,130 @@ def get_activations_with_generation(
             if len(non_special_positions) > 0:
                 probe_position = non_special_positions[-1]
             else:
-                # Fallback to second-to-last position if all are special tokens
-                probe_position = len(generated_ids) - 2 if len(generated_ids) > 1 else 0
+                # Fallback to last position if all are special tokens
+                probe_position = len(input_ids) - 1 if len(input_ids) > 0 else 0
 
-            # Now we need to run a forward pass to get the hidden states
-            # because generate() doesn't return hidden states in a convenient format
-            # We'll run inference on the full generated sequence
-            full_inputs = {"input_ids": generated_ids.unsqueeze(0)}
-            forward_outputs = model(**full_inputs, output_hidden_states=True, use_cache=False)
+            # Run forward pass to get hidden states
+            forward_outputs = model(**inputs, output_hidden_states=True, use_cache=False)
 
             # Get the hidden states from the specified layer
-            # outputs.hidden_states is a tuple of (num_layers + 1) tensors
-            # hidden_states[0] is embeddings; transformer block L is at hidden_states[L + 1]
             layer_output = forward_outputs.hidden_states[layer_idx + 1]
 
             # Get the activation at the chosen token position
-            # Shape: (batch_size, seq_len, hidden_dim)
             final_token_activation = layer_output[0, probe_position, :].float().cpu().numpy()
 
             activations_list.append(final_token_activation)
+    
+    print(f"[GPU {gpu_id}] Activation extraction complete!")
+    return np.array(activations_list)
 
-    return np.array(activations_list), generated_texts
+
+def get_activations_from_texts_multi_gpu(
+    model_name: str,
+    full_texts: List[str],
+    layer_idx: int,
+    num_gpus: int = 8
+) -> np.ndarray:
+    """
+    Get activations from a specific layer using multiple GPUs in parallel.
+
+    Args:
+        model_name: Name of the model to use
+        full_texts: List of full generated texts (prompt + completion)
+        layer_idx: Which layer to extract activations from
+        num_gpus: Number of GPUs to use
+
+    Returns:
+        activations: Array of activations (num_prompts, hidden_dim)
+    """
+    print(f"\n{'='*60}")
+    print(f"Distributing {len(full_texts)} texts across {num_gpus} GPUs for activation extraction")
+    print(f"{'='*60}")
+    
+    # Split texts into chunks for each GPU
+    chunk_size = (len(full_texts) + num_gpus - 1) // num_gpus
+    text_chunks = [full_texts[i:i + chunk_size] for i in range(0, len(full_texts), chunk_size)]
+    
+    print(f"Chunk sizes: {[len(chunk) for chunk in text_chunks]}")
+    
+    # Prepare arguments for each GPU
+    args_list = [
+        (gpu_id, model_name, chunk, layer_idx)
+        for gpu_id, chunk in enumerate(text_chunks)
+    ]
+    
+    # Use multiprocessing to extract activations on each GPU
+    with Pool(processes=num_gpus) as pool:
+        results = pool.map(extract_activations_single_gpu, args_list)
+    
+    # Concatenate all activations
+    activations = np.vstack(results)
+    
+    print(f"\nAll GPUs completed activation extraction! Shape: {activations.shape}")
+    return activations
 
 
 def cache_mmlu_activations(
     model_name: str,
     layer_idx: int,
     num_examples: int = 1000,
-    max_new_tokens: int = 100
+    max_new_tokens: int = 100,
+    num_gpus: int = 8
 ):
     """
     Cache layer activations for MMLU questions with autoregressive generation.
+    Uses VLLM across multiple GPUs for efficient generation, then extracts activations in parallel.
 
     Args:
         model_name: Name of the model (e.g., "google/gemma-2-2b-it")
         layer_idx: Layer index to extract activations from
         num_examples: Number of MMLU examples to process
         max_new_tokens: Maximum number of tokens to generate
+        num_gpus: Number of GPUs to use (default: 8)
     """
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    print(f"Loading {num_examples} MMLU examples...")
+    print(f"="*80)
+    print(f"MULTI-GPU ACTIVATION CACHING")
+    print(f"Model: {model_name}")
+    print(f"Layer: {layer_idx}")
+    print(f"Examples: {num_examples}")
+    print(f"GPUs: {num_gpus}")
+    print(f"="*80)
+
+    print(f"\nLoading {num_examples} MMLU examples...")
     questions, prompts = load_mmlu_data(num_examples=num_examples)
 
     print(f"Total samples: {len(prompts)}")
 
-    print(f"\nLoading model {model_name}...")
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    preferred_dtype = torch.bfloat16
-
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=preferred_dtype,
-        device_map="cuda",
-        attn_implementation="eager"
+    # Step 1: Generate all completions with VLLM across multiple GPUs
+    print(f"\n{'='*80}")
+    print(f"STEP 1: Generating completions with VLLM ({num_gpus} GPUs)")
+    print(f"{'='*80}")
+    generated_texts = generate_with_vllm_multi_gpu(
+        model_name=model_name,
+        prompts=prompts,
+        max_new_tokens=max_new_tokens,
+        temperature=1.0,
+        num_gpus=num_gpus
     )
 
-    # Avoid cache during hidden-state extraction
-    if hasattr(model, "config"):
-        model.config.use_cache = False
-
-    print(f"\nExtracting activations from layer {layer_idx} with autoregressive generation...")
-    print(f"  Max new tokens: {max_new_tokens}")
-    activations, generated_texts = get_activations_with_generation(
-        model, tokenizer, prompts, layer_idx, "cuda", max_new_tokens
+    # Step 2: Extract activations using multiple GPUs in parallel
+    print(f"\n{'='*80}")
+    print(f"STEP 2: Extracting activations from layer {layer_idx} ({num_gpus} GPUs)")
+    print(f"{'='*80}")
+    activations = get_activations_from_texts_multi_gpu(
+        model_name=model_name,
+        full_texts=generated_texts,
+        layer_idx=layer_idx,
+        num_gpus=num_gpus
     )
 
-    print(f"\nActivations shape: {activations.shape}")
+    print(f"\n{'='*80}")
+    print(f"Activations shape: {activations.shape}")
     print(f"  Samples: {activations.shape[0]}")
     print(f"  Features: {activations.shape[1]}")
+    print(f"{'='*80}")
 
     # Compute binary labels: 1 if correct, 0 if incorrect
     print(f"\nComputing binary correctness labels...")
@@ -338,11 +456,18 @@ def cache_mmlu_activations(
 
 
 if __name__ == "__main__":
-    # Cache MMLU activations for specific layers
+    # Set multiprocessing start method for CUDA compatibility
+    try:
+        mp.set_start_method('spawn', force=True)
+    except RuntimeError:
+        pass  # Already set
+    
+    # Cache MMLU activations for specific layers using all 8 GPUs
     cache_mmlu_activations(
         model_name="google/gemma-3-1b-it",
         layer_idx=13,
         num_examples=200,
-        max_new_tokens=100
+        max_new_tokens=100,
+        num_gpus=8
     )
 
