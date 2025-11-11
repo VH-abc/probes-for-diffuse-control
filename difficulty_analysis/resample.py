@@ -6,37 +6,23 @@ On each task:
 - if the pass rate is <= 10% or >= 90%, run it 10 more times
 '''
 
-import os
 import json
 import random
 import numpy as np
 import asyncio
 from datasets import load_dataset
-from openai import AsyncOpenAI
-from tqdm.asyncio import tqdm as async_tqdm
-from collections import defaultdict
-from typing import List
+
+from common import (
+    get_vllm_clients,
+    run_inference_batch,
+    VLLM_BASE_PORT,
+    NUM_VLLM_SERVERS,
+    MAX_CONCURRENT_REQUESTS
+)
 
 # Configuration
-VLLM_BASE_PORT = 8000
-NUM_VLLM_SERVERS = 8  # Number of GPU servers
 NUM_TASKS = 300
 RESULTS_FILE = "mmlu_difficulty_results.json"
-MAX_CONCURRENT_REQUESTS = 32  # Max concurrent requests per server
-
-def get_vllm_clients():
-    """Create AsyncOpenAI clients for all vLLM servers."""
-    clients = []
-    for i in range(NUM_VLLM_SERVERS):
-        port = VLLM_BASE_PORT + i
-        client = AsyncOpenAI(
-            base_url=f"http://localhost:{port}/v1",
-            api_key="EMPTY",  # vLLM doesn't need an API key
-            max_retries=3,
-        )
-        clients.append(client)
-    print(f"Created {len(clients)} vLLM clients (ports {VLLM_BASE_PORT}-{VLLM_BASE_PORT + NUM_VLLM_SERVERS - 1})")
-    return clients
 
 def load_mmlu_tasks():
     """Load MMLU dataset and sample random tasks."""
@@ -53,107 +39,23 @@ def load_mmlu_tasks():
     print(f"Sampled {len(tasks)} random tasks")
     return tasks
 
-def format_mmlu_prompt(task):
-    """Format MMLU task as a prompt for the model."""
-    question = task['question']
-    choices = task['choices']
-    
-    # Format choices as A, B, C, D
-    choice_text = "\n".join([f"{chr(65+i)}. {choice}" for i, choice in enumerate(choices)])
-    
-    prompt = f"""Answer the following multiple choice question by responding with the letter of the correct answer (A, B, C, or D).
-
-Question: {question}
-
-{choice_text}
-
-Answer:"""
-    
-    return prompt
-
-def extract_answer(response_text):
-    """Extract answer letter from model response."""
-    response_text = response_text.strip().upper()
-    
-    # Try to find A, B, C, or D in the response
-    for letter in ['A', 'B', 'C', 'D']:
-        if letter in response_text[:10]:  # Check first 10 chars
-            return letter
-    
-    # If not found in first chars, check entire response
-    for letter in ['A', 'B', 'C', 'D']:
-        if letter in response_text:
-            return letter
-    
-    return None
-
-async def run_single_inference(client, prompt, correct_answer, semaphore):
-    """Run a single inference call with rate limiting."""
-    async with semaphore:
-        try:
-            response = await client.chat.completions.create(
-                model="gemma",  # This matches --served-model-name in vllm.bash
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=10,
-            )
-            
-            model_answer = extract_answer(response.choices[0].message.content)
-            is_correct = (model_answer == correct_answer)
-            
-            return {
-                'model_answer': model_answer,
-                'correct_answer': correct_answer,
-                'is_correct': is_correct,
-                'raw_response': response.choices[0].message.content
-            }
-        except Exception as e:
-            print(f"Error during inference: {e}")
-            return {
-                'model_answer': None,
-                'correct_answer': correct_answer,
-                'is_correct': False,
-                'error': str(e)
-            }
-
-async def run_inference(clients, task, num_runs=1):
-    """Run inference on a task multiple times, distributing across clients."""
-    prompt = format_mmlu_prompt(task)
-    correct_answer = chr(65 + task['answer'])  # Convert 0,1,2,3 to A,B,C,D
-    
-    # Create semaphore for rate limiting
-    semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
-    
-    # Distribute runs across clients using round-robin
-    tasks = []
-    for i in range(num_runs):
-        client = clients[i % len(clients)]
-        tasks.append(run_single_inference(client, prompt, correct_answer, semaphore))
-    
-    # Run all inference calls concurrently
-    results = await asyncio.gather(*tasks)
-    
-    return list(results)
-
 async def analyze_task(clients, task, task_idx):
     """Analyze a single task with adaptive sampling."""
     # Initial 5 runs
-    results = await run_inference(clients, task, num_runs=5)
+    results = await run_inference_batch(clients, task, num_runs=5, max_concurrent=MAX_CONCURRENT_REQUESTS)
     pass_count = sum(1 for r in results if r['is_correct'])
     pass_rate = pass_count / len(results)
     
     # Adaptive sampling - run 5 more if extreme
     if pass_rate <= 0.2 or pass_rate >= 0.8:
-        additional_results = await run_inference(clients, task, num_runs=5)
+        additional_results = await run_inference_batch(clients, task, num_runs=5, max_concurrent=MAX_CONCURRENT_REQUESTS)
         results.extend(additional_results)
         pass_count = sum(1 for r in results if r['is_correct'])
         pass_rate = pass_count / len(results)
         
         # Run 10 more if very extreme
         if pass_rate <= 0.1 or pass_rate >= 0.9:
-            additional_results = await run_inference(clients, task, num_runs=10)
+            additional_results = await run_inference_batch(clients, task, num_runs=10, max_concurrent=MAX_CONCURRENT_REQUESTS)
             results.extend(additional_results)
             pass_count = sum(1 for r in results if r['is_correct'])
             pass_rate = pass_count / len(results)
