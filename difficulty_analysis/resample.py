@@ -13,6 +13,7 @@ import asyncio
 import sys
 import os
 from datasets import load_dataset
+import matplotlib.pyplot as plt
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -161,7 +162,22 @@ def main():
     """Synchronous entry point."""
     asyncio.run(async_main())
 
-if __name__ == "__main__":
-    main()
+# Make histogram of pass rates and save to file
+def make_histogram():
 
+    # make plot of pass rates from results file
+    with open(RESULTS_FILE, 'r') as f:
+        results = json.load(f)
+    pass_rates = [r['pass_rate'] for r in results]
     
+    plt.hist(pass_rates, bins=20)
+    plt.xlabel('Pass Rate')
+    plt.ylabel('Frequency')
+    plt.title('Histogram of Pass Rates')
+    plt.savefig('pass_rates_histogram.png')
+    plt.close()
+    print(f"Saved histogram to pass_rates_histogram.png")
+
+if __name__ == "__main__":
+    # main()
+    make_histogram()
