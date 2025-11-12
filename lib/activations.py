@@ -120,6 +120,7 @@ def extract_activations_single_gpu(
             low_cpu_mem_usage=True,  # Reduces CPU memory during loading
             local_files_only=use_cache  # Don't re-download if cached
         )
+        print(f"[GPU {gpu_id}] Model loaded on device: {device} == {model.device}")
         load_time = time.time() - load_start
         print(f"[GPU {gpu_id}] Model loaded in {load_time:.2f}s")
 

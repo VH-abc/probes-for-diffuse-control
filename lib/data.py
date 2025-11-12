@@ -4,12 +4,15 @@ MMLU data loading and formatting utilities.
 
 import json
 import re
+import random
 from typing import Dict, List, Tuple, Optional
 
 
 def load_mmlu_data(
     mmlu_file: str = "mmlu_data/train.json",
-    num_examples: Optional[int] = None
+    num_examples: Optional[int] = None,
+    shuffle: bool = True,
+    seed: int = 42
 ) -> Tuple[List[Dict], List[str]]:
     """
     Load MMLU questions from train.json.
@@ -17,6 +20,8 @@ def load_mmlu_data(
     Args:
         mmlu_file: Path to MMLU data file
         num_examples: Number of examples to load (None = all)
+        shuffle: Whether to shuffle before selecting examples
+        seed: Random seed for shuffling
 
     Returns:
         questions: List of MMLU question dictionaries
@@ -24,11 +29,19 @@ def load_mmlu_data(
     """
     questions = []
 
+    # Load all questions first
     with open(mmlu_file, 'r') as f:
-        for i, line in enumerate(f):
-            if num_examples is not None and i >= num_examples:
-                break
+        for line in f:
             questions.append(json.loads(line))
+    
+    # Shuffle if requested
+    if shuffle:
+        random.seed(seed)
+        random.shuffle(questions)
+    
+    # Take only the requested number
+    if num_examples is not None:
+        questions = questions[:num_examples]
 
     # Format questions with the prompt
     formatted_prompts = [format_mmlu_question(q) for q in questions]

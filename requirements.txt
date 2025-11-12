@@ -5,7 +5,9 @@ torch
 scikit-learn
 matplotlib
 openai
-
-# VLLM for fast inference
+accelerate
 vllm
+
+# profiler
+scalene
 
