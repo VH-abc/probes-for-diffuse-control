@@ -19,7 +19,8 @@ from probe_analysis import run_probe_analysis
 
 
 def sweep_layers(
-    layers: List[int],
+    prompt_name: str = "50/50",
+    layers: List[int] = None,
     token_position: str = "last",
     num_examples: int = None,
     skip_cache: bool = False,
@@ -29,6 +30,7 @@ def sweep_layers(
     Sweep across multiple layers.
 
     Args:
+        prompt_name: Name of the prompt to use (e.g., "benign", "50/50") - defaults to "50/50"
         layers: List of layer indices to sweep
         token_position: Token position to use
         num_examples: Number of examples
@@ -40,6 +42,7 @@ def sweep_layers(
     print("\n" + "#" * 80)
     print("# LAYER SWEEP")
     print(f"# Model: {config.MODEL_SHORT_NAME}")
+    print(f"# Prompt: {prompt_name}")
     print(f"# Layers: {layers}")
     print(f"# Token Position: {token_position}")
     print(f"# Examples: {num_examples}")
@@ -57,6 +60,7 @@ def sweep_layers(
             if not skip_cache:
                 print(f"Caching activations for layer {layer}...")
                 cache_mmlu_activations(
+                    prompt_name=prompt_name,
                     layer_idx=layer,
                     token_position=token_position,
                     num_examples=num_examples
@@ -68,6 +72,7 @@ def sweep_layers(
             if not skip_analysis:
                 print(f"Running probe analysis for layer {layer}...")
                 run_probe_analysis(
+                    prompt_name=prompt_name,
                     layer=layer,
                     token_position=token_position,
                     num_examples=num_examples
@@ -86,7 +91,7 @@ def sweep_layers(
 
     # Generate comparison report
     if successful_layers and not skip_analysis:
-        generate_layer_comparison(successful_layers, token_position, num_examples)
+        generate_layer_comparison(prompt_name, successful_layers, token_position, num_examples)
 
     print(f"\n{'#' * 80}")
     print(f"# LAYER SWEEP COMPLETE")
@@ -96,7 +101,8 @@ def sweep_layers(
 
 
 def sweep_positions(
-    positions: List[str],
+    prompt_name: str = "50/50",
+    positions: List[str] = None,
     layer: int = None,
     num_examples: int = None,
     skip_cache: bool = False,
@@ -106,6 +112,7 @@ def sweep_positions(
     Sweep across multiple token positions.
 
     Args:
+        prompt_name: Name of the prompt to use (e.g., "benign", "50/50") - defaults to "50/50"
         positions: List of token positions to sweep
         layer: Layer to use
         num_examples: Number of examples
@@ -118,6 +125,7 @@ def sweep_positions(
     print("\n" + "#" * 80)
     print("# TOKEN POSITION SWEEP")
     print(f"# Model: {config.MODEL_SHORT_NAME}")
+    print(f"# Prompt: {prompt_name}")
     print(f"# Layer: {layer}")
     print(f"# Positions: {positions}")
     print(f"# Examples: {num_examples}")
@@ -135,6 +143,7 @@ def sweep_positions(
             if not skip_cache:
                 print(f"Caching activations for position '{position}'...")
                 cache_mmlu_activations(
+                    prompt_name=prompt_name,
                     layer_idx=layer,
                     token_position=position,
                     num_examples=num_examples
@@ -146,6 +155,7 @@ def sweep_positions(
             if not skip_analysis:
                 print(f"Running probe analysis for position '{position}'...")
                 run_probe_analysis(
+                    prompt_name=prompt_name,
                     layer=layer,
                     token_position=position,
                     num_examples=num_examples
@@ -164,7 +174,7 @@ def sweep_positions(
 
     # Generate comparison report
     if successful_positions and not skip_analysis:
-        generate_position_comparison(successful_positions, layer, num_examples)
+        generate_position_comparison(prompt_name, successful_positions, layer, num_examples)
 
     print(f"\n{'#' * 80}")
     print(f"# POSITION SWEEP COMPLETE")
@@ -173,11 +183,12 @@ def sweep_positions(
     print(f"{'#' * 80}\n")
 
 
-def generate_layer_comparison(layers: List[int], token_position: str, num_examples: int):
+def generate_layer_comparison(prompt_name: str, layers: List[int], token_position: str, num_examples: int):
     """Generate comparison report for layer sweep."""
     print(f"\n{'=' * 80}")
     print(f"LAYER SWEEP SUMMARY")
     print(f"Model: {config.MODEL_SHORT_NAME}")
+    print(f"Prompt: {prompt_name}")
     print(f"Token Position: {token_position}")
     print(f"Examples: {num_examples}")
     print(f"{'=' * 80}\n")
@@ -187,6 +198,7 @@ def generate_layer_comparison(layers: List[int], token_position: str, num_exampl
         # Load metadata
         metadata_file = os.path.join(
             config.CACHED_ACTIVATIONS_DIR,
+            prompt_name,
             f"mmlu_layer{layer:02d}_pos-{token_position}_n{num_examples}_metadata.json"
         )
         # Load AUROC
@@ -260,11 +272,12 @@ def generate_layer_comparison(layers: List[int], token_position: str, num_exampl
     print(f"{'=' * 80}\n")
 
 
-def generate_position_comparison(positions: List[str], layer: int, num_examples: int):
+def generate_position_comparison(prompt_name: str, positions: List[str], layer: int, num_examples: int):
     """Generate comparison report for position sweep."""
     print(f"\n{'=' * 80}")
     print(f"TOKEN POSITION SWEEP SUMMARY")
     print(f"Model: {config.MODEL_SHORT_NAME}")
+    print(f"Prompt: {prompt_name}")
     print(f"Layer: {layer}")
     print(f"Examples: {num_examples}")
     print(f"{'=' * 80}\n")
@@ -328,6 +341,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sweep layers and token positions")
     parser.add_argument("--mode", type=str, choices=["layers", "positions"], default="layers",
                         help="Sweep mode: 'layers' or 'positions'")
+    parser.add_argument("--prompt", type=str, default="50/50",
+                        help="Prompt name to use (e.g., 'benign', '50/50') (default: 50/50)")
     parser.add_argument("--layers", type=int, nargs="+", default=[10, 12, 13, 14, 16],
                         help="Layers to sweep (default: [10, 12, 13, 14, 16])")
     parser.add_argument("--positions", type=str, nargs="+", default=["last", "first", "middle"],
@@ -344,6 +359,7 @@ if __name__ == "__main__":
 
     if args.quick:
         sweep_layers(
+            prompt_name=args.prompt,
             layers=list(range(10, 17)),
             token_position="last",
             num_examples=args.num_examples,
@@ -352,6 +368,7 @@ if __name__ == "__main__":
         )
     elif args.mode == "layers":
         sweep_layers(
+            prompt_name=args.prompt,
             layers=args.layers,
             token_position=args.position,
             num_examples=args.num_examples,
@@ -360,6 +377,7 @@ if __name__ == "__main__":
         )
     elif args.mode == "positions":
         sweep_positions(
+            prompt_name=args.prompt,
             positions=args.positions,
             layer=args.layer,
             num_examples=args.num_examples,

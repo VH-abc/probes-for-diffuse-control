@@ -26,7 +26,7 @@ class TestDataModule(unittest.TestCase):
             'subject': 'math'
         }
 
-        formatted = format_mmlu_question(question_dict)
+        formatted = format_mmlu_question(question_dict, "benign")
 
         self.assertIn('What is 2+2?', formatted)
         self.assertIn('A. 3', formatted)

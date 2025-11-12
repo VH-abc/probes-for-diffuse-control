@@ -31,14 +31,14 @@ launch_server() {
     local port=$2
     
     echo "Starting VLLM server on GPU $gpu_id, port $port..."
-    
+    mkdir -p logs
     CUDA_VISIBLE_DEVICES=$gpu_id python3 -m vllm.entrypoints.openai.api_server \
         --model "$MODEL_NAME" \
         --port $port \
         --max-model-len $MAX_MODEL_LEN \
         --gpu-memory-utilization $GPU_MEMORY \
         --disable-log-requests \
-        > "vllm_server_${port}.log" 2>&1 &
+        > "logs/vllm_server_${port}.log" 2>&1 &
     
     echo "  Started on port $port (GPU $gpu_id), logs: vllm_server_${port}.log"
 }

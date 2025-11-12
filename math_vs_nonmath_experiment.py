@@ -120,7 +120,7 @@ def load_balanced_math_nonmath_data(
     nonmath_prompts = []
     
     # Load all questions and separate by category
-    all_questions, all_prompts = load_mmlu_data(mmlu_file, num_examples=None)
+    all_questions, all_prompts = load_mmlu_data(mmlu_file, num_examples=None, prompt_name="benign")
     
     for q, p in zip(all_questions, all_prompts):
         subject = q['subject']

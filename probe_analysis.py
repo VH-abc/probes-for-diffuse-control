@@ -36,11 +36,12 @@ from lib.visualization import (
 )
 
 
-def load_cached_activations(layer_idx: int, token_position: str, num_examples: int):
+def load_cached_activations(prompt_name: str, layer_idx: int, token_position: str, num_examples: int):
     """
     Load cached MMLU activations.
 
     Args:
+        prompt_name: Name of the prompt used (e.g., "benign", "50/50") - REQUIRED
         layer_idx: Layer index
         token_position: Token position
         num_examples: Number of examples
@@ -49,16 +50,18 @@ def load_cached_activations(layer_idx: int, token_position: str, num_examples: i
         activations, labels, subjects, prompts
     """
     prefix = f"mmlu_layer{layer_idx:02d}_pos-{token_position}_n{num_examples}"
+    cache_dir = os.path.join(config.CACHED_ACTIVATIONS_DIR, prompt_name)
     
-    activations_file = os.path.join(config.CACHED_ACTIVATIONS_DIR, f"{prefix}_activations.npy")
-    labels_file = os.path.join(config.CACHED_ACTIVATIONS_DIR, f"{prefix}_labels.npy")
-    subjects_file = os.path.join(config.CACHED_ACTIVATIONS_DIR, f"{prefix}_subjects.npy")
-    prompts_file = os.path.join(config.CACHED_ACTIVATIONS_DIR, f"{prefix}_prompts.npy")
+    activations_file = os.path.join(cache_dir, f"{prefix}_activations.npy")
+    labels_file = os.path.join(cache_dir, f"{prefix}_labels.npy")
+    subjects_file = os.path.join(cache_dir, f"{prefix}_subjects.npy")
+    prompts_file = os.path.join(cache_dir, f"{prefix}_prompts.npy")
 
     print(f"\nLoading cached activations:")
     print(f"  Model: {config.MODEL_SHORT_NAME}")
+    print(f"  Prompt: {prompt_name}")
     print(f"  Layer: {layer_idx}, Position: {token_position}, Examples: {num_examples}")
-    print(f"  Directory: {config.CACHED_ACTIVATIONS_DIR}")
+    print(f"  Directory: {cache_dir}")
 
     if not os.path.exists(activations_file):
         raise FileNotFoundError(f"Activations not found: {activations_file}")
@@ -75,6 +78,7 @@ def load_cached_activations(layer_idx: int, token_position: str, num_examples: i
 
 
 def run_probe_analysis(
+    prompt_name: str,
     layer: int = None,
     token_position: str = None,
     num_examples: int = None,
@@ -84,6 +88,7 @@ def run_probe_analysis(
     Run complete probe analysis pipeline.
 
     Args:
+        prompt_name: Name of the prompt used (e.g., "benign", "50/50") - REQUIRED
         layer: Layer index
         token_position: Token position
         num_examples: Number of examples
@@ -100,12 +105,13 @@ def run_probe_analysis(
     print("\n" + "#" * 80)
     print("# PROBE ANALYSIS")
     print(f"# Model: {config.MODEL_SHORT_NAME}")
+    print(f"# Prompt: {prompt_name}")
     print(f"# Layer: {layer}, Position: {token_position}, Examples: {num_examples}")
     print("#" * 80)
 
     # Load data
     activations, labels, subjects, prompts = load_cached_activations(
-        layer, token_position, num_examples
+        prompt_name, layer, token_position, num_examples
     )
 
     # Shuffle for random split
@@ -244,6 +250,8 @@ def run_probe_analysis(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Probe analysis for cached activations")
+    parser.add_argument("--prompt", type=str, required=True,
+                        help="Prompt name to use (e.g., 'benign', '50/50') - REQUIRED")
     parser.add_argument("--layer", type=int, help=f"Layer index (default: {config.DEFAULT_LAYER})")
     parser.add_argument("--position", type=str, choices=["last", "first", "middle", "all"],
                         help=f"Token position (default: {config.DEFAULT_TOKEN_POSITION})")
@@ -255,6 +263,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     run_probe_analysis(
+        prompt_name=args.prompt,
         layer=args.layer,
         token_position=args.position,
         num_examples=args.num_examples,

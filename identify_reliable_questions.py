@@ -64,7 +64,7 @@ def identify_reliable_questions(
     
     # Load MMLU data
     print(f"\nLoading {num_examples} MMLU examples from {mmlu_file}...")
-    questions, prompts = load_mmlu_data(mmlu_file, num_examples)
+    questions, prompts = load_mmlu_data(mmlu_file, num_examples, prompt_name="benign")
     print(f"Loaded {len(prompts)} questions")
     
     # Generate completions for all trials in one call

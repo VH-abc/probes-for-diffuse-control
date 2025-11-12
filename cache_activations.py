@@ -24,6 +24,7 @@ from lib.activations import extract_activations_multi_gpu
 
 
 def cache_mmlu_activations(
+    prompt_name: str,
     model_name: str = None,
     layer_idx: int = None,
     token_position: str = None,
@@ -37,6 +38,7 @@ def cache_mmlu_activations(
     Cache layer activations for MMLU questions with autoregressive generation.
 
     Args:
+        prompt_name: Name of the prompt to use (e.g., "benign", "50/50") - REQUIRED
         model_name: Model name (defaults to config.MODEL_NAME)
         layer_idx: Layer index to extract (defaults to config.DEFAULT_LAYER)
         token_position: Token position to extract (defaults to config.DEFAULT_TOKEN_POSITION)
@@ -55,24 +57,27 @@ def cache_mmlu_activations(
     temperature = temperature if temperature is not None else config.TEMPERATURE
     num_gpus = num_gpus or config.VLLM_NUM_SERVERS
 
-    os.makedirs(config.CACHED_ACTIVATIONS_DIR, exist_ok=True)
+    # Create output directory based on prompt name
+    output_dir = os.path.join(config.CACHED_ACTIVATIONS_DIR, prompt_name)
+    os.makedirs(output_dir, exist_ok=True)
 
     print("\n" + "=" * 80)
     print("ACTIVATION CACHING")
     print("=" * 80)
     config.print_config()
     print(f"\nRun Parameters:")
+    print(f"  Prompt: {prompt_name}")
     print(f"  Layer: {layer_idx}")
     print(f"  Token Position: {token_position}")
     print(f"  Examples: {num_examples}")
     print(f"  Max New Tokens: {max_new_tokens}")
     print(f"  Temperature: {temperature}")
-    print(f"  Output: {config.CACHED_ACTIVATIONS_DIR}")
+    print(f"  Output: {output_dir}")
     print("=" * 80)
 
     # Load MMLU data
     print(f"\nLoading {num_examples} MMLU examples from {mmlu_file}...")
-    questions, prompts = load_mmlu_data(mmlu_file, num_examples)
+    questions, prompts = load_mmlu_data(mmlu_file, num_examples, prompt_name=prompt_name)
     print(f"Loaded {len(prompts)} samples")
 
     # Step 1: Generate completions via VLLM
@@ -143,13 +148,13 @@ def cache_mmlu_activations(
     print(f"\nSaving cached data...")
     saved_files = {}
     for key, (filename, data) in files_to_save.items():
-        filepath = os.path.join(config.CACHED_ACTIVATIONS_DIR, filename)
+        filepath = os.path.join(output_dir, filename)
         np.save(filepath, data)
         saved_files[key] = filepath
         print(f"  ✓ {key}: {filepath}")
 
     # Save questions as JSON
-    questions_file = os.path.join(config.CACHED_ACTIVATIONS_DIR, f"{output_prefix}_questions.json")
+    questions_file = os.path.join(output_dir, f"{output_prefix}_questions.json")
     with open(questions_file, 'w') as f:
         json.dump(questions, f, indent=2)
     saved_files['questions'] = questions_file
@@ -159,6 +164,7 @@ def cache_mmlu_activations(
     metadata = {
         "model_name": model_name,
         "model_short_name": config.MODEL_SHORT_NAME,
+        "prompt_name": prompt_name,
         "layer_idx": layer_idx,
         "token_position": token_position,
         "num_examples": num_examples,
@@ -168,10 +174,10 @@ def cache_mmlu_activations(
         "num_correct": int(num_correct),
         "num_incorrect": int(num_incorrect),
         "accuracy": float(accuracy),
-        "description": f"MMLU activations at layer {layer_idx}, token position '{token_position}'. Labels: 1=correct, 0=incorrect.",
+        "description": f"MMLU activations at layer {layer_idx}, token position '{token_position}', prompt '{prompt_name}'. Labels: 1=correct, 0=incorrect.",
         "files": saved_files
     }
-    metadata_file = os.path.join(config.CACHED_ACTIVATIONS_DIR, f"{output_prefix}_metadata.json")
+    metadata_file = os.path.join(output_dir, f"{output_prefix}_metadata.json")
     with open(metadata_file, 'w') as f:
         json.dump(metadata, f, indent=2)
     print(f"  ✓ metadata: {metadata_file}")
@@ -191,6 +197,8 @@ if __name__ == "__main__":
         pass  # Already set
 
     parser = argparse.ArgumentParser(description="Cache MMLU activations")
+    parser.add_argument("--prompt", type=str, required=True,
+                        help="Prompt name to use (e.g., 'benign', '50/50') - REQUIRED")
     parser.add_argument("--model", type=str, help=f"Model name (default: {config.MODEL_NAME})")
     parser.add_argument("--layer", type=int, help=f"Layer index (default: {config.DEFAULT_LAYER})")
     parser.add_argument("--position", type=str, choices=["last", "first", "middle", "all"],
@@ -205,6 +213,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     cache_mmlu_activations(
+        prompt_name=args.prompt,
         model_name=args.model,
         layer_idx=args.layer,
         token_position=args.position,

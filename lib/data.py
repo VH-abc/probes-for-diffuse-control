@@ -5,12 +5,19 @@ MMLU data loading and formatting utilities.
 import json
 import re
 import random
+import sys
+import os
 from typing import Dict, List, Tuple, Optional
+
+# Add parent directory to path to import prompts
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from prompts import get_prompt
 
 
 def load_mmlu_data(
-    mmlu_file: str = "mmlu_data/train.json",
-    num_examples: Optional[int] = None,
+    mmlu_file: str,
+    num_examples: Optional[int],
+    prompt_name: str,
     shuffle: bool = True,
     seed: int = 42
 ) -> Tuple[List[Dict], List[str]]:
@@ -20,6 +27,7 @@ def load_mmlu_data(
     Args:
         mmlu_file: Path to MMLU data file
         num_examples: Number of examples to load (None = all)
+        prompt_name: Name of the prompt to use (e.g., "benign", "50/50")
         shuffle: Whether to shuffle before selecting examples
         seed: Random seed for shuffling
 
@@ -44,17 +52,18 @@ def load_mmlu_data(
         questions = questions[:num_examples]
 
     # Format questions with the prompt
-    formatted_prompts = [format_mmlu_question(q) for q in questions]
+    formatted_prompts = [format_mmlu_question(q, prompt_name) for q in questions]
 
     return questions, formatted_prompts
 
 
-def format_mmlu_question(question_dict: Dict) -> str:
+def format_mmlu_question(question_dict: Dict, prompt_name: str) -> str:
     """
     Format an MMLU question with answer choices labeled A, B, C, D.
 
     Args:
         question_dict: Dictionary with 'question', 'choices', 'answer', 'subject' keys
+        prompt_name: Name of the prompt to use (e.g., "benign", "50/50")
 
     Returns:
         Formatted prompt string
@@ -68,13 +77,9 @@ def format_mmlu_question(question_dict: Dict) -> str:
         [f"{letter}. {choice}" for letter, choice in zip(choice_letters, choices)]
     )
 
-    prompt = f"""Please solve the following MMLU question and submit your answer in the format \\box{{letter of answer choice}}.
-
-Question: {question}
-
-{formatted_choices}
-
-Your answer:"""
+    # Get the prompt template and format it
+    prompt_template = get_prompt(prompt_name)
+    prompt = prompt_template.format(question=question, formatted_choices=formatted_choices)
 
     return prompt
 
