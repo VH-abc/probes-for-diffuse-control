@@ -32,7 +32,10 @@ def cache_mmlu_activations(
     max_new_tokens: int = None,
     temperature: float = None,
     num_gpus: int = None,
-    mmlu_file: str = "mmlu_data/train.json"
+    batch_size: int = None,
+    mmlu_file: str = "mmlu_data/train.json",
+    filter_reliable: bool = False,
+    reliable_questions_file: str = None
 ):
     """
     Cache layer activations for MMLU questions with autoregressive generation.
@@ -46,7 +49,10 @@ def cache_mmlu_activations(
         max_new_tokens: Max tokens to generate (defaults to config.MAX_NEW_TOKENS)
         temperature: Sampling temperature (defaults to config.TEMPERATURE)
         num_gpus: Number of GPUs (defaults to config.VLLM_NUM_SERVERS)
+        batch_size: Batch size for activation extraction (defaults to config.ACTIVATION_BATCH_SIZE)
         mmlu_file: Path to MMLU data file
+        filter_reliable: Whether to filter to only reliable questions (defaults to False)
+        reliable_questions_file: Path to reliable questions JSON file (defaults to auto-detected path)
     """
     # Use config defaults if not specified
     model_name = model_name or config.MODEL_NAME
@@ -56,9 +62,17 @@ def cache_mmlu_activations(
     max_new_tokens = max_new_tokens or config.MAX_NEW_TOKENS
     temperature = temperature if temperature is not None else config.TEMPERATURE
     num_gpus = num_gpus or config.VLLM_NUM_SERVERS
+    batch_size = batch_size if batch_size is not None else config.ACTIVATION_BATCH_SIZE
+    
+    # Set default reliable questions file if filtering
+    if filter_reliable and reliable_questions_file is None:
+        reliable_questions_file = os.path.join(
+            config.BASE_DIR, config.MODEL_SHORT_NAME, "reliable_questions.json"
+        )
 
-    # Create output directory based on prompt name
-    output_dir = os.path.join(config.CACHED_ACTIVATIONS_DIR, prompt_name)
+    # Create output directory based on prompt name (separate cache for filtered)
+    cache_prompt_name = f"{prompt_name}_filtered" if filter_reliable else prompt_name
+    output_dir = os.path.join(config.CACHED_ACTIVATIONS_DIR, cache_prompt_name)
     os.makedirs(output_dir, exist_ok=True)
 
     print("\n" + "=" * 80)
@@ -67,22 +81,31 @@ def cache_mmlu_activations(
     config.print_config()
     print(f"\nRun Parameters:")
     print(f"  Prompt: {prompt_name}")
+    print(f"  Filtered: {filter_reliable}")
+    if filter_reliable:
+        print(f"  Reliable Questions File: {reliable_questions_file}")
     print(f"  Layer: {layer_idx}")
     print(f"  Token Position: {token_position}")
     print(f"  Examples: {num_examples}")
     print(f"  Max New Tokens: {max_new_tokens}")
     print(f"  Temperature: {temperature}")
+    print(f"  Batch Size (activation): {batch_size}")
     print(f"  Output: {output_dir}")
     print("=" * 80)
 
-    # Load MMLU data
+    # Load MMLU data (with optional filtering)
     print(f"\nLoading {num_examples} MMLU examples from {mmlu_file}...")
-    questions, prompts = load_mmlu_data(mmlu_file, num_examples, prompt_name=prompt_name)
+    questions, prompts = load_mmlu_data(
+        mmlu_file, num_examples, 
+        prompt_name=prompt_name,
+        filter_reliable=filter_reliable,
+        reliable_questions_file=reliable_questions_file
+    )
     print(f"Loaded {len(prompts)} samples")
 
-    # Step 1: Generate completions via VLLM
+    # Step 1: Generate completions via VLLM (with caching)
     print(f"\n{'=' * 80}")
-    print(f"STEP 1: Generating completions with VLLM servers")
+    print(f"STEP 1: Generating completions with VLLM servers (or loading from cache)")
     print(f"{'=' * 80}")
     generated_texts, completions_only = generate_with_vllm_multi_server(
         prompts=prompts,
@@ -91,7 +114,11 @@ def cache_mmlu_activations(
         model_name=model_name,  # Use full model name for API
         num_servers=num_gpus,
         base_port=config.VLLM_BASE_PORT,
-        max_concurrent_requests=config.MAX_CONCURRENT_REQUESTS_PER_SERVER
+        max_concurrent_requests=config.MAX_CONCURRENT_REQUESTS_PER_SERVER,
+        use_cache=True,  # Enable generation caching
+        model_short_name=config.MODEL_SHORT_NAME,
+        prompt_name=cache_prompt_name,  # Use filtered name for separate cache
+        subject_type="all"  # Cache key includes subject type
     )
 
     # Step 2: Extract activations
@@ -104,8 +131,9 @@ def cache_mmlu_activations(
         layer_idx=layer_idx,
         token_position=token_position,
         num_gpus=num_gpus,
-        batch_size=config.ACTIVATION_BATCH_SIZE,
-        use_model_cache=True
+        batch_size=batch_size,
+        use_model_cache=True,
+        gpu_ids=config.ACTIVATION_GPUS  # Use dedicated activation GPUs
     )
 
     print(f"\n{'=' * 80}")
@@ -165,6 +193,9 @@ def cache_mmlu_activations(
         "model_name": model_name,
         "model_short_name": config.MODEL_SHORT_NAME,
         "prompt_name": prompt_name,
+        "cache_prompt_name": cache_prompt_name,
+        "filter_reliable": filter_reliable,
+        "reliable_questions_file": reliable_questions_file if filter_reliable else None,
         "layer_idx": layer_idx,
         "token_position": token_position,
         "num_examples": num_examples,
@@ -174,7 +205,7 @@ def cache_mmlu_activations(
         "num_correct": int(num_correct),
         "num_incorrect": int(num_incorrect),
         "accuracy": float(accuracy),
-        "description": f"MMLU activations at layer {layer_idx}, token position '{token_position}', prompt '{prompt_name}'. Labels: 1=correct, 0=incorrect.",
+        "description": f"MMLU activations at layer {layer_idx}, token position '{token_position}', prompt '{prompt_name}'{' (filtered to reliable questions)' if filter_reliable else ''}. Labels: 1=correct, 0=incorrect.",
         "files": saved_files
     }
     metadata_file = os.path.join(output_dir, f"{output_prefix}_metadata.json")
@@ -207,8 +238,13 @@ if __name__ == "__main__":
     parser.add_argument("--max-tokens", type=int, help=f"Max new tokens (default: {config.MAX_NEW_TOKENS})")
     parser.add_argument("--temperature", type=float, help=f"Temperature (default: {config.TEMPERATURE})")
     parser.add_argument("--num-gpus", type=int, help=f"Number of GPUs (default: {config.VLLM_NUM_SERVERS})")
+    parser.add_argument("--batch-size", type=int, help=f"Batch size for activation extraction (default: {config.ACTIVATION_BATCH_SIZE}). Reduce to 1 if OOM.")
     parser.add_argument("--mmlu-file", type=str, default="mmlu_data/train.json",
                         help="Path to MMLU data file")
+    parser.add_argument("--filtered", action="store_true",
+                        help="Filter to only reliable questions (questions with 100%% pass rate)")
+    parser.add_argument("--reliable-questions-file", type=str,
+                        help=f"Path to reliable questions JSON file (default: experiments/{config.MODEL_SHORT_NAME}/reliable_questions.json)")
 
     args = parser.parse_args()
 
@@ -221,6 +257,9 @@ if __name__ == "__main__":
         max_new_tokens=args.max_tokens,
         temperature=args.temperature,
         num_gpus=args.num_gpus,
-        mmlu_file=args.mmlu_file
+        batch_size=args.batch_size,
+        mmlu_file=args.mmlu_file,
+        filter_reliable=args.filtered,
+        reliable_questions_file=args.reliable_questions_file
     )
 

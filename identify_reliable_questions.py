@@ -80,7 +80,11 @@ def identify_reliable_questions(
         model_name=config.MODEL_NAME,
         num_servers=num_gpus,
         base_port=config.VLLM_BASE_PORT,
-        max_concurrent_requests=config.MAX_CONCURRENT_REQUESTS_PER_SERVER
+        max_concurrent_requests=config.MAX_CONCURRENT_REQUESTS_PER_SERVER,
+        use_cache=True,
+        model_short_name=config.MODEL_SHORT_NAME,
+        prompt_name="benign",
+        subject_type="all"  # All subjects for reliable questions
     )
     
     # Compute correctness for all completions

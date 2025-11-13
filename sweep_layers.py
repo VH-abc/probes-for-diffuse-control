@@ -16,7 +16,10 @@ from typing import List, Optional
 import config
 from cache_activations import cache_mmlu_activations
 from probe_analysis import run_probe_analysis
+from download_mmlu import download_mmlu
 
+if not os.path.exists("mmlu_data"):
+    download_mmlu()
 
 def sweep_layers(
     prompt_name: str = "50/50",
@@ -24,7 +27,9 @@ def sweep_layers(
     token_position: str = "last",
     num_examples: int = None,
     skip_cache: bool = False,
-    skip_analysis: bool = False
+    skip_analysis: bool = False,
+    filter_reliable: bool = False,
+    reliable_questions_file: str = None
 ):
     """
     Sweep across multiple layers.
@@ -36,13 +41,24 @@ def sweep_layers(
         num_examples: Number of examples
         skip_cache: Skip activation caching (use existing)
         skip_analysis: Skip probe analysis
+        filter_reliable: Whether to filter to only reliable questions
+        reliable_questions_file: Path to reliable questions JSON file
     """
     num_examples = num_examples or config.DEFAULT_NUM_EXAMPLES
+    
+    # Set default reliable questions file if filtering
+    if filter_reliable and reliable_questions_file is None:
+        reliable_questions_file = os.path.join(
+            config.BASE_DIR, config.MODEL_SHORT_NAME, "reliable_questions.json"
+        )
 
     print("\n" + "#" * 80)
     print("# LAYER SWEEP")
     print(f"# Model: {config.MODEL_SHORT_NAME}")
     print(f"# Prompt: {prompt_name}")
+    print(f"# Filtered: {filter_reliable}")
+    if filter_reliable:
+        print(f"# Reliable Questions File: {reliable_questions_file}")
     print(f"# Layers: {layers}")
     print(f"# Token Position: {token_position}")
     print(f"# Examples: {num_examples}")
@@ -63,7 +79,9 @@ def sweep_layers(
                     prompt_name=prompt_name,
                     layer_idx=layer,
                     token_position=token_position,
-                    num_examples=num_examples
+                    num_examples=num_examples,
+                    filter_reliable=filter_reliable,
+                    reliable_questions_file=reliable_questions_file
                 )
             else:
                 print(f"⏩ Skipping cache (using existing)")
@@ -75,7 +93,8 @@ def sweep_layers(
                     prompt_name=prompt_name,
                     layer=layer,
                     token_position=token_position,
-                    num_examples=num_examples
+                    num_examples=num_examples,
+                    filter_reliable=filter_reliable
                 )
             else:
                 print(f"⏩ Skipping analysis")
@@ -91,7 +110,7 @@ def sweep_layers(
 
     # Generate comparison report
     if successful_layers and not skip_analysis:
-        generate_layer_comparison(prompt_name, successful_layers, token_position, num_examples)
+        generate_layer_comparison(prompt_name, successful_layers, token_position, num_examples, filter_reliable)
 
     print(f"\n{'#' * 80}")
     print(f"# LAYER SWEEP COMPLETE")
@@ -106,7 +125,9 @@ def sweep_positions(
     layer: int = None,
     num_examples: int = None,
     skip_cache: bool = False,
-    skip_analysis: bool = False
+    skip_analysis: bool = False,
+    filter_reliable: bool = False,
+    reliable_questions_file: str = None
 ):
     """
     Sweep across multiple token positions.
@@ -118,14 +139,25 @@ def sweep_positions(
         num_examples: Number of examples
         skip_cache: Skip activation caching (use existing)
         skip_analysis: Skip probe analysis
+        filter_reliable: Whether to filter to only reliable questions
+        reliable_questions_file: Path to reliable questions JSON file
     """
     layer = layer if layer is not None else config.DEFAULT_LAYER
     num_examples = num_examples or config.DEFAULT_NUM_EXAMPLES
+    
+    # Set default reliable questions file if filtering
+    if filter_reliable and reliable_questions_file is None:
+        reliable_questions_file = os.path.join(
+            config.BASE_DIR, config.MODEL_SHORT_NAME, "reliable_questions.json"
+        )
 
     print("\n" + "#" * 80)
     print("# TOKEN POSITION SWEEP")
     print(f"# Model: {config.MODEL_SHORT_NAME}")
     print(f"# Prompt: {prompt_name}")
+    print(f"# Filtered: {filter_reliable}")
+    if filter_reliable:
+        print(f"# Reliable Questions File: {reliable_questions_file}")
     print(f"# Layer: {layer}")
     print(f"# Positions: {positions}")
     print(f"# Examples: {num_examples}")
@@ -146,7 +178,9 @@ def sweep_positions(
                     prompt_name=prompt_name,
                     layer_idx=layer,
                     token_position=position,
-                    num_examples=num_examples
+                    num_examples=num_examples,
+                    filter_reliable=filter_reliable,
+                    reliable_questions_file=reliable_questions_file
                 )
             else:
                 print(f"⏩ Skipping cache (using existing)")
@@ -158,7 +192,8 @@ def sweep_positions(
                     prompt_name=prompt_name,
                     layer=layer,
                     token_position=position,
-                    num_examples=num_examples
+                    num_examples=num_examples,
+                    filter_reliable=filter_reliable
                 )
             else:
                 print(f"⏩ Skipping analysis")
@@ -174,7 +209,7 @@ def sweep_positions(
 
     # Generate comparison report
     if successful_positions and not skip_analysis:
-        generate_position_comparison(prompt_name, successful_positions, layer, num_examples)
+        generate_position_comparison(prompt_name, successful_positions, layer, num_examples, filter_reliable)
 
     print(f"\n{'#' * 80}")
     print(f"# POSITION SWEEP COMPLETE")
@@ -183,22 +218,26 @@ def sweep_positions(
     print(f"{'#' * 80}\n")
 
 
-def generate_layer_comparison(prompt_name: str, layers: List[int], token_position: str, num_examples: int):
+def generate_layer_comparison(prompt_name: str, layers: List[int], token_position: str, num_examples: int, filter_reliable: bool = False):
     """Generate comparison report for layer sweep."""
     print(f"\n{'=' * 80}")
     print(f"LAYER SWEEP SUMMARY")
     print(f"Model: {config.MODEL_SHORT_NAME}")
     print(f"Prompt: {prompt_name}")
+    print(f"Filtered: {filter_reliable}")
     print(f"Token Position: {token_position}")
     print(f"Examples: {num_examples}")
     print(f"{'=' * 80}\n")
+    
+    # Use filtered cache directory if requested
+    cache_prompt_name = f"{prompt_name}_filtered" if filter_reliable else prompt_name
 
     results = {}
     for layer in layers:
         # Load metadata
         metadata_file = os.path.join(
             config.CACHED_ACTIVATIONS_DIR,
-            prompt_name,
+            cache_prompt_name,
             f"mmlu_layer{layer:02d}_pos-{token_position}_n{num_examples}_metadata.json"
         )
         # Load AUROC
@@ -272,15 +311,18 @@ def generate_layer_comparison(prompt_name: str, layers: List[int], token_positio
     print(f"{'=' * 80}\n")
 
 
-def generate_position_comparison(prompt_name: str, positions: List[str], layer: int, num_examples: int):
+def generate_position_comparison(prompt_name: str, positions: List[str], layer: int, num_examples: int, filter_reliable: bool = False):
     """Generate comparison report for position sweep."""
     print(f"\n{'=' * 80}")
     print(f"TOKEN POSITION SWEEP SUMMARY")
     print(f"Model: {config.MODEL_SHORT_NAME}")
     print(f"Prompt: {prompt_name}")
+    print(f"Filtered: {filter_reliable}")
     print(f"Layer: {layer}")
     print(f"Examples: {num_examples}")
     print(f"{'=' * 80}\n")
+    
+    # Use filtered cache directory if requested (not needed here since we only check AUROC)
 
     results = {}
     for position in positions:
@@ -354,6 +396,10 @@ if __name__ == "__main__":
     parser.add_argument("--skip-cache", action="store_true", help="Skip caching (use existing)")
     parser.add_argument("--skip-analysis", action="store_true", help="Skip analysis (only cache)")
     parser.add_argument("--quick", action="store_true", help="Quick sweep: layers 10-16")
+    parser.add_argument("--filtered", action="store_true",
+                        help="Filter to only reliable questions (questions with 100%% pass rate)")
+    parser.add_argument("--reliable-questions-file", type=str,
+                        help=f"Path to reliable questions JSON file (default: experiments/{config.MODEL_SHORT_NAME}/reliable_questions.json)")
 
     args = parser.parse_args()
 
@@ -364,7 +410,9 @@ if __name__ == "__main__":
             token_position="last",
             num_examples=args.num_examples,
             skip_cache=args.skip_cache,
-            skip_analysis=args.skip_analysis
+            skip_analysis=args.skip_analysis,
+            filter_reliable=args.filtered,
+            reliable_questions_file=args.reliable_questions_file
         )
     elif args.mode == "layers":
         sweep_layers(
@@ -373,7 +421,9 @@ if __name__ == "__main__":
             token_position=args.position,
             num_examples=args.num_examples,
             skip_cache=args.skip_cache,
-            skip_analysis=args.skip_analysis
+            skip_analysis=args.skip_analysis,
+            filter_reliable=args.filtered,
+            reliable_questions_file=args.reliable_questions_file
         )
     elif args.mode == "positions":
         sweep_positions(
@@ -382,6 +432,8 @@ if __name__ == "__main__":
             layer=args.layer,
             num_examples=args.num_examples,
             skip_cache=args.skip_cache,
-            skip_analysis=args.skip_analysis
+            skip_analysis=args.skip_analysis,
+            filter_reliable=args.filtered,
+            reliable_questions_file=args.reliable_questions_file
         )
 

@@ -2,12 +2,16 @@
 Text generation utilities using VLLM API servers.
 """
 
+import os
+import json
+import hashlib
 import time
 import multiprocessing as mp
 from multiprocessing import Manager
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from openai import OpenAI
+import numpy as np
 
 
 def generate_single_prompt(
@@ -121,6 +125,104 @@ def generate_with_vllm_concurrent(
         completions_dict[index] = []
 
 
+def get_generation_cache_path(
+    model_short_name: str,
+    prompt_name: str,
+    subject_type: str,
+    num_samples: int,
+    max_new_tokens: int,
+    temperature: float,
+    base_dir: str = "experiments"
+) -> str:
+    """
+    Get the path to cached generations based on high-level parameters.
+    
+    Args:
+        model_short_name: Short name of model (e.g., "gemma-3-12b")
+        prompt_name: Name of prompt (e.g., "benign", "50/50")
+        subject_type: Type of subjects (e.g., "all", "math", "nonmath")
+        num_samples: Number of samples
+        max_new_tokens: Max tokens to generate
+        temperature: Sampling temperature
+        base_dir: Base directory for experiments
+        
+    Returns:
+        Path to cache file prefix
+    """
+    cache_dir = os.path.join(base_dir, model_short_name, "generations", prompt_name, subject_type)
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    # Cache filename based on parameters that matter
+    cache_name = f"n{num_samples}_t{temperature}_maxtok{max_new_tokens}"
+    return os.path.join(cache_dir, cache_name)
+
+
+def save_generations_to_cache(
+    cache_path: str,
+    full_texts: List[str],
+    completions: List[str],
+    metadata: dict
+):
+    """
+    Save generated texts to cache.
+    
+    Args:
+        cache_path: Base path for cache files
+        full_texts: List of full texts (prompt + completion)
+        completions: List of completions only
+        metadata: Generation metadata
+    """
+    print(f"  💾 Saving generations to cache: {cache_path}")
+    
+    # Save as numpy arrays (more efficient for large datasets)
+    np.save(f"{cache_path}_full_texts.npy", np.array(full_texts, dtype=object))
+    np.save(f"{cache_path}_completions.npy", np.array(completions, dtype=object))
+    
+    # Save as JSON for human readability
+    with open(f"{cache_path}_full_texts.json", 'w', encoding='utf-8') as f:
+        json.dump(full_texts, f, indent=2, ensure_ascii=False)
+    with open(f"{cache_path}_completions.json", 'w', encoding='utf-8') as f:
+        json.dump(completions, f, indent=2, ensure_ascii=False)
+    
+    # Save metadata as JSON
+    with open(f"{cache_path}_metadata.json", 'w') as f:
+        json.dump(metadata, f, indent=2)
+    
+    print(f"  ✓ Cached {len(full_texts)} generations (numpy + JSON)")
+
+
+def load_generations_from_cache(
+    cache_path: str
+) -> Optional[Tuple[List[str], List[str], dict]]:
+    """
+    Load generated texts from cache.
+    
+    Args:
+        cache_path: Base path for cache files
+        
+    Returns:
+        (full_texts, completions, metadata) if cache exists, None otherwise
+    """
+    full_texts_file = f"{cache_path}_full_texts.npy"
+    completions_file = f"{cache_path}_completions.npy"
+    metadata_file = f"{cache_path}_metadata.json"
+    
+    if not all(os.path.exists(f) for f in [full_texts_file, completions_file, metadata_file]):
+        return None
+    
+    try:
+        full_texts = np.load(full_texts_file, allow_pickle=True).tolist()
+        completions = np.load(completions_file, allow_pickle=True).tolist()
+        
+        with open(metadata_file, 'r') as f:
+            metadata = json.load(f)
+        
+        return full_texts, completions, metadata
+    except Exception as e:
+        print(f"  ⚠️  Warning: Could not load cache: {e}")
+        return None
+
+
 def generate_with_vllm_multi_server(
     prompts: List[str],
     max_new_tokens: int,
@@ -128,10 +230,16 @@ def generate_with_vllm_multi_server(
     model_name: str,
     num_servers: int,
     base_port: int,
-    max_concurrent_requests: int = 10
+    max_concurrent_requests: int = 10,
+    use_cache: bool = True,
+    model_short_name: Optional[str] = None,
+    prompt_name: Optional[str] = None,
+    subject_type: str = "all"
 ) -> Tuple[List[str], List[str]]:
     """
     Generate completions using multiple VLLM API servers in parallel.
+    
+    Caches generations based on high-level parameters (prompt format, model, subject, num_samples).
 
     Args:
         prompts: List of prompts to generate from
@@ -141,11 +249,51 @@ def generate_with_vllm_multi_server(
         num_servers: Number of VLLM servers to use
         base_port: Base port number (servers on base_port, base_port+1, ...)
         max_concurrent_requests: Max concurrent requests per server
+        use_cache: Whether to use cached generations (default: True)
+        model_short_name: Short model name for cache organization
+        prompt_name: Prompt name for cache organization (e.g., "benign", "50/50")
+        subject_type: Subject type for cache organization (e.g., "all", "math", "nonmath")
 
     Returns:
         full_texts: List of full generated text (prompt + completion)
         completions: List of just the completions (without prompts)
     """
+    # Try to load from cache first
+    if use_cache and model_short_name and prompt_name:
+        cache_path = get_generation_cache_path(
+            model_short_name, prompt_name, subject_type, 
+            len(prompts), max_new_tokens, temperature
+        )
+        
+        print(f"\n{'='*60}")
+        print(f"Checking for cached generations...")
+        print(f"  Model: {model_short_name}")
+        print(f"  Prompt: {prompt_name}")
+        print(f"  Subject: {subject_type}")
+        print(f"  Samples: {len(prompts)}")
+        print(f"  Cache path: {cache_path}")
+        print(f"{'='*60}")
+        
+        cached_data = load_generations_from_cache(cache_path)
+        if cached_data is not None:
+            full_texts, completions, metadata = cached_data
+            
+            # Verify cache has correct number of samples
+            if len(full_texts) == len(prompts):
+                print(f"\n✓ Found cached generations!")
+                print(f"  Loaded {len(full_texts)} cached generations")
+                print(f"  Cached on: {metadata.get('timestamp', 'unknown')}")
+                print(f"  Model: {metadata.get('model_name', 'unknown')}")
+                print(f"  Subject: {metadata.get('subject_type', 'unknown')}")
+                print(f"{'='*60}\n")
+                return full_texts, completions
+            else:
+                print(f"  ⚠️  Cache found but sample count mismatch: {len(full_texts)} vs {len(prompts)}")
+                print(f"  Will regenerate")
+        else:
+            print(f"  No cache found - will generate and save")
+    
+    # Generate if not cached
     print(f"\n{'='*60}")
     print(f"Distributing {len(prompts)} prompts across {num_servers} VLLM servers")
     print(f"Servers: ports {base_port} to {base_port + num_servers - 1}")
@@ -193,5 +341,27 @@ def generate_with_vllm_multi_server(
     print(f"\nAll servers completed generation!")
     print(f"  Total full texts: {len(full_texts)}")
     print(f"  Total completions: {len(completions)}")
+    
+    # Save to cache if requested
+    if use_cache and model_short_name and prompt_name:
+        cache_path = get_generation_cache_path(
+            model_short_name, prompt_name, subject_type,
+            len(prompts), max_new_tokens, temperature
+        )
+        
+        metadata = {
+            "model_name": model_name,
+            "model_short_name": model_short_name,
+            "prompt_name": prompt_name,
+            "subject_type": subject_type,
+            "max_new_tokens": max_new_tokens,
+            "temperature": temperature,
+            "num_samples": len(prompts),
+            "num_servers": num_servers,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        save_generations_to_cache(cache_path, full_texts, completions, metadata)
+    
     return full_texts, completions
 

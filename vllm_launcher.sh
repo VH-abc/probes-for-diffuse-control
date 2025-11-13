@@ -13,6 +13,7 @@ BASE_PORT=$(python3 -c "import config; print(config.VLLM_BASE_PORT)")
 NUM_SERVERS=$(python3 -c "import config; print(config.VLLM_NUM_SERVERS)")
 MAX_MODEL_LEN=$(python3 -c "import config; print(config.VLLM_MAX_MODEL_LEN)")
 GPU_MEMORY=$(python3 -c "import config; print(config.VLLM_GPU_MEMORY_UTILIZATION)")
+VLLM_GPUS=$(python3 -c "import config; print(','.join(map(str, config.VLLM_GPUS)))")
 
 echo "================================================================================"
 echo "VLLM Server Launcher"
@@ -22,6 +23,7 @@ echo "Base Port: $BASE_PORT"
 echo "Number of Servers: $NUM_SERVERS"
 echo "Max Model Length: $MAX_MODEL_LEN"
 echo "GPU Memory Utilization: $GPU_MEMORY"
+echo "VLLM GPUs: $VLLM_GPUS"
 echo "================================================================================"
 echo ""
 
@@ -43,10 +45,14 @@ launch_server() {
     echo "  Started on port $port (GPU $gpu_id), logs: vllm_server_${port}.log"
 }
 
-# Launch servers
+# Convert VLLM_GPUS string to array
+IFS=',' read -ra GPU_ARRAY <<< "$VLLM_GPUS"
+
+# Launch servers (cycling through available GPUs)
 for ((i=0; i<NUM_SERVERS; i++)); do
     port=$((BASE_PORT + i))
-    launch_server $i $port
+    gpu_id=${GPU_ARRAY[$((i % ${#GPU_ARRAY[@]}))]}
+    launch_server $gpu_id $port
     sleep 2  # Brief delay between launches
 done
 

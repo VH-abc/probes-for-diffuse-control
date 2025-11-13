@@ -36,7 +36,7 @@ from lib.visualization import (
 )
 
 
-def load_cached_activations(prompt_name: str, layer_idx: int, token_position: str, num_examples: int):
+def load_cached_activations(prompt_name: str, layer_idx: int, token_position: str, num_examples: int, filter_reliable: bool = False):
     """
     Load cached MMLU activations.
 
@@ -45,12 +45,15 @@ def load_cached_activations(prompt_name: str, layer_idx: int, token_position: st
         layer_idx: Layer index
         token_position: Token position
         num_examples: Number of examples
+        filter_reliable: Whether to load filtered activations
 
     Returns:
         activations, labels, subjects, prompts
     """
+    # Use filtered cache directory if requested
+    cache_prompt_name = f"{prompt_name}_filtered" if filter_reliable else prompt_name
     prefix = f"mmlu_layer{layer_idx:02d}_pos-{token_position}_n{num_examples}"
-    cache_dir = os.path.join(config.CACHED_ACTIVATIONS_DIR, prompt_name)
+    cache_dir = os.path.join(config.CACHED_ACTIVATIONS_DIR, cache_prompt_name)
     
     activations_file = os.path.join(cache_dir, f"{prefix}_activations.npy")
     labels_file = os.path.join(cache_dir, f"{prefix}_labels.npy")
@@ -60,6 +63,7 @@ def load_cached_activations(prompt_name: str, layer_idx: int, token_position: st
     print(f"\nLoading cached activations:")
     print(f"  Model: {config.MODEL_SHORT_NAME}")
     print(f"  Prompt: {prompt_name}")
+    print(f"  Filtered: {filter_reliable}")
     print(f"  Layer: {layer_idx}, Position: {token_position}, Examples: {num_examples}")
     print(f"  Directory: {cache_dir}")
 
@@ -82,7 +86,8 @@ def run_probe_analysis(
     layer: int = None,
     token_position: str = None,
     num_examples: int = None,
-    skip_experiments: list = None
+    skip_experiments: list = None,
+    filter_reliable: bool = False
 ):
     """
     Run complete probe analysis pipeline.
@@ -93,6 +98,7 @@ def run_probe_analysis(
         token_position: Token position
         num_examples: Number of examples
         skip_experiments: List of experiment names to skip
+        filter_reliable: Whether to load filtered activations
     """
     # Use config defaults
     layer = layer if layer is not None else config.DEFAULT_LAYER
@@ -106,12 +112,13 @@ def run_probe_analysis(
     print("# PROBE ANALYSIS")
     print(f"# Model: {config.MODEL_SHORT_NAME}")
     print(f"# Prompt: {prompt_name}")
+    print(f"# Filtered: {filter_reliable}")
     print(f"# Layer: {layer}, Position: {token_position}, Examples: {num_examples}")
     print("#" * 80)
 
     # Load data
     activations, labels, subjects, prompts = load_cached_activations(
-        prompt_name, layer, token_position, num_examples
+        prompt_name, layer, token_position, num_examples, filter_reliable
     )
 
     # Shuffle for random split
@@ -259,6 +266,8 @@ if __name__ == "__main__":
     parser.add_argument("--skip", type=str, nargs="+", 
                         choices=["linear_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"],
                         help="Experiments to skip")
+    parser.add_argument("--filtered", action="store_true",
+                        help="Use filtered activations (reliable questions only)")
 
     args = parser.parse_args()
 
@@ -267,6 +276,7 @@ if __name__ == "__main__":
         layer=args.layer,
         token_position=args.position,
         num_examples=args.num_examples,
-        skip_experiments=args.skip
+        skip_experiments=args.skip,
+        filter_reliable=args.filtered
     )
 

@@ -221,7 +221,11 @@ def run_math_vs_nonmath_experiment(
         model_name=model_name,
         num_servers=num_gpus,
         base_port=config.VLLM_BASE_PORT,
-        max_concurrent_requests=config.MAX_CONCURRENT_REQUESTS_PER_SERVER
+        max_concurrent_requests=config.MAX_CONCURRENT_REQUESTS_PER_SERVER,
+        use_cache=True,
+        model_short_name=config.MODEL_SHORT_NAME,
+        prompt_name="benign",
+        subject_type="math_and_nonmath"  # This experiment uses both math and non-math subjects
     )
     
     # Step 3: Extract activations
@@ -235,7 +239,8 @@ def run_math_vs_nonmath_experiment(
         token_position=token_position,
         num_gpus=num_gpus,
         batch_size=config.ACTIVATION_BATCH_SIZE,
-        use_model_cache=True
+        use_model_cache=True,
+        gpu_ids=config.ACTIVATION_GPUS  # Use dedicated activation GPUs
     )
     
     print(f"\n{'=' * 80}")
