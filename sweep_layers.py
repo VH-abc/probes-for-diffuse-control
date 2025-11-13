@@ -152,10 +152,11 @@ def sweep_layers(
     if successful_layers and not skip_analysis:
         generate_layer_comparison(prompt_name, successful_layers, token_position, num_examples, filter_reliable)
 
+    results_dir = config.get_results_dir(num_examples, filter_reliable)
     print(f"\n{'#' * 80}")
     print(f"# LAYER SWEEP COMPLETE")
     print(f"# Successful: {len(successful_layers)}/{len(layers)} layers")
-    print(f"# Results in: {config.RESULTS_DIR}")
+    print(f"# Results in: {results_dir}")
     print(f"{'#' * 80}\n")
 
 
@@ -257,10 +258,11 @@ def sweep_positions(
     if successful_positions and not skip_analysis:
         generate_position_comparison(prompt_name, successful_positions, layer, num_examples, filter_reliable)
 
+    results_dir = config.get_results_dir(num_examples, filter_reliable)
     print(f"\n{'#' * 80}")
     print(f"# POSITION SWEEP COMPLETE")
     print(f"# Successful: {len(successful_positions)}/{len(positions)} positions")
-    print(f"# Results in: {config.RESULTS_DIR}")
+    print(f"# Results in: {results_dir}")
     print(f"{'#' * 80}\n")
 
 
@@ -280,6 +282,7 @@ def generate_layer_comparison(prompt_name: str, layers: List[int], token_positio
 
     results = {}
     filter_suffix = "filtered" if filter_reliable else "unfiltered"
+    results_dir = config.get_results_dir(num_examples, filter_reliable)
     
     for layer in layers:
         # Load metadata
@@ -291,7 +294,7 @@ def generate_layer_comparison(prompt_name: str, layers: List[int], token_positio
         )
         # Load AUROC
         auroc_file = os.path.join(
-            config.RESULTS_DIR,
+            results_dir,
             f"auroc_layer{layer}_pos-{token_position}_n{num_examples}_{filter_suffix}.json"
         )
 
@@ -335,7 +338,7 @@ def generate_layer_comparison(prompt_name: str, layers: List[int], token_positio
         print(f"\n🏆 BEST LAYER: Layer {best_layer} (AUROC = {best_auroc:.4f})")
 
     # Save report
-    report_file = os.path.join(config.RESULTS_DIR, f"layer_sweep_summary_{filter_suffix}.txt")
+    report_file = os.path.join(results_dir, f"layer_sweep_summary_{filter_suffix}.txt")
     with open(report_file, 'w') as f:
         f.write(f"LAYER SWEEP SUMMARY\n")
         f.write(f"Model: {config.MODEL_SHORT_NAME}\n")
@@ -374,12 +377,13 @@ def generate_position_comparison(prompt_name: str, positions: List[str], layer: 
     print(f"{'=' * 80}\n")
     
     filter_suffix = "filtered" if filter_reliable else "unfiltered"
+    results_dir = config.get_results_dir(num_examples, filter_reliable)
 
     results = {}
     for position in positions:
         # Load AUROC
         auroc_file = os.path.join(
-            config.RESULTS_DIR,
+            results_dir,
             f"auroc_layer{layer}_pos-{position}_n{num_examples}_{filter_suffix}.json"
         )
 
@@ -409,7 +413,7 @@ def generate_position_comparison(prompt_name: str, positions: List[str], layer: 
         print(f"\n🏆 BEST POSITION: {best_position} (AUROC = {best_auroc:.4f})")
 
     # Save report
-    report_file = os.path.join(config.RESULTS_DIR, f"position_sweep_layer{layer}_summary_{filter_suffix}.txt")
+    report_file = os.path.join(results_dir, f"position_sweep_layer{layer}_summary_{filter_suffix}.txt")
     with open(report_file, 'w') as f:
         f.write(f"TOKEN POSITION SWEEP SUMMARY\n")
         f.write(f"Model: {config.MODEL_SHORT_NAME}\n")

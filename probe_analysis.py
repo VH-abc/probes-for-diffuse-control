@@ -107,7 +107,9 @@ def run_probe_analysis(
     num_examples = num_examples or config.DEFAULT_NUM_EXAMPLES
     skip_experiments = skip_experiments or []
 
-    os.makedirs(config.RESULTS_DIR, exist_ok=True)
+    # Get organized results directory
+    results_dir = config.get_results_dir(num_examples, filter_reliable)
+    os.makedirs(results_dir, exist_ok=True)
 
     print("\n" + "#" * 80)
     print("# PROBE ANALYSIS")
@@ -115,6 +117,7 @@ def run_probe_analysis(
     print(f"# Prompt: {prompt_name}")
     print(f"# Filtered: {filter_reliable}")
     print(f"# Layer: {layer}, Position: {token_position}, Examples: {num_examples}")
+    print(f"# Results Dir: {results_dir}")
     print("#" * 80)
 
     # Load data
@@ -155,24 +158,24 @@ def run_probe_analysis(
         print(f"  AUROC: {auroc:.4f}")
 
         # Save AUROC
-        auroc_file = os.path.join(config.RESULTS_DIR, f"auroc_{fname}.json")
+        auroc_file = os.path.join(results_dir, f"auroc_{fname}.json")
         with open(auroc_file, 'w') as f:
             json.dump({'auroc': float(auroc), 'fname': fname}, f, indent=2)
 
         # Visualizations
         plot_roc_curve(
             fpr, tpr, auroc,
-            os.path.join(config.RESULTS_DIR, f"roc_{fname}.png"),
+            os.path.join(results_dir, f"roc_{fname}.png"),
             f"ROC Curve - {fname}"
         )
         plot_score_distribution(
             clf.decision_function(X_test), y_test,
-            os.path.join(config.RESULTS_DIR, f"scores_{fname}.png"),
+            os.path.join(results_dir, f"scores_{fname}.png"),
             f"Score Distribution - {fname}"
         )
         save_training_analysis(
             clf, X_train, y_train, train_subjects, train_prompts,
-            os.path.join(config.RESULTS_DIR, f"training_analysis_{fname}.txt"),
+            os.path.join(results_dir, f"training_analysis_{fname}.txt"),
             fname
         )
 
@@ -184,7 +187,7 @@ def run_probe_analysis(
 
         plot_pca(
             X_test, y_test,
-            os.path.join(config.RESULTS_DIR, f"pca_{fname}.png"),
+            os.path.join(results_dir, f"pca_{fname}.png"),
             f"PCA - {fname}"
         )
 
@@ -202,7 +205,7 @@ def run_probe_analysis(
 
         plot_roc_curve(
             fpr_anomaly, tpr_anomaly, auroc_anomaly,
-            os.path.join(config.RESULTS_DIR, f"roc_anomaly_{fname}.png"),
+            os.path.join(results_dir, f"roc_anomaly_{fname}.png"),
             f"Anomaly Detection ROC - {fname}"
         )
 
@@ -226,7 +229,7 @@ def run_probe_analysis(
 
         plot_auroc_vs_training_size(
             results,
-            os.path.join(config.RESULTS_DIR, f"auroc_vs_n_{fname}.png")
+            os.path.join(results_dir, f"auroc_vs_n_{fname}.png")
         )
 
     # Experiment 5: Label Corruption Robustness
@@ -249,12 +252,12 @@ def run_probe_analysis(
 
         plot_label_corruption_robustness(
             results,
-            os.path.join(config.RESULTS_DIR, f"corruption_{fname}.png")
+            os.path.join(results_dir, f"corruption_{fname}.png")
         )
 
     print(f"\n{'#' * 80}")
     print(f"# Analysis complete!")
-    print(f"# Results saved to: {config.RESULTS_DIR}")
+    print(f"# Results saved to: {results_dir}")
     print(f"{'#' * 80}\n")
 
 

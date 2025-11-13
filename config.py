@@ -20,7 +20,23 @@ ACTIVATION_GPUS = list(range(8))  # GPUs for activation extraction (should not o
 # Directory structure (model-specific)
 BASE_DIR = "experiments"
 CACHED_ACTIVATIONS_DIR = f"{BASE_DIR}/{MODEL_SHORT_NAME}/cached_activations"
-RESULTS_DIR = f"{BASE_DIR}/{MODEL_SHORT_NAME}/results"
+RESULTS_DIR = f"{BASE_DIR}/{MODEL_SHORT_NAME}/results"  # Base results directory
+
+
+def get_results_dir(num_examples: int = None, filter_reliable: bool = False) -> str:
+    """
+    Get results directory path organized by number of examples and filter status.
+    
+    Args:
+        num_examples: Number of examples (default: DEFAULT_NUM_EXAMPLES)
+        filter_reliable: Whether using filtered data (default: False)
+        
+    Returns:
+        Path to results subdirectory
+    """
+    num_examples = num_examples or DEFAULT_NUM_EXAMPLES
+    filter_suffix = "filtered" if filter_reliable else "unfiltered"
+    return f"{RESULTS_DIR}/n{num_examples}_{filter_suffix}"
 
 # Generation parameters
 MAX_NEW_TOKENS = 1000 #100
@@ -28,7 +44,7 @@ TEMPERATURE = 1.0  # Sampling temperature
 
 # Experiment parameters
 DEFAULT_LAYER = 13
-DEFAULT_NUM_EXAMPLES = 200
+DEFAULT_NUM_EXAMPLES = 2000
 DEFAULT_TOKEN_POSITION = "last"  # Options: "last", "first", "middle", "all"
 DEFAULT_LAYER_SWEEP = [10]
 DEFAULT_POSITION_SWEEP = ["last", "first", "middle"]
