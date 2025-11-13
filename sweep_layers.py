@@ -21,6 +21,40 @@ from download_mmlu import download_mmlu
 if not os.path.exists("mmlu_data"):
     download_mmlu()
 
+
+def check_cache_exists(prompt_name: str, layer: int, token_position: str, num_examples: int, filter_reliable: bool = False) -> bool:
+    """
+    Check if cached activations already exist for the given parameters.
+    
+    Args:
+        prompt_name: Prompt name
+        layer: Layer index
+        token_position: Token position
+        num_examples: Number of examples
+        filter_reliable: Whether using filtered cache
+        
+    Returns:
+        True if cache exists and is complete, False otherwise
+    """
+    cache_prompt_name = f"{prompt_name}_filtered" if filter_reliable else prompt_name
+    filter_suffix = "filtered" if filter_reliable else "unfiltered"
+    prefix = f"mmlu_layer{layer:02d}_pos-{token_position}_n{num_examples}_{filter_suffix}"
+    cache_dir = os.path.join(config.CACHED_ACTIVATIONS_DIR, cache_prompt_name)
+    
+    # Check for essential files
+    essential_files = [
+        f"{prefix}_activations.npy",
+        f"{prefix}_labels.npy",
+        f"{prefix}_metadata.json"
+    ]
+    
+    for filename in essential_files:
+        filepath = os.path.join(cache_dir, filename)
+        if not os.path.exists(filepath):
+            return False
+    
+    return True
+
 def sweep_layers(
     prompt_name: str = "50-50",
     layers: List[int] = None,
@@ -74,17 +108,23 @@ def sweep_layers(
         try:
             # Step 1: Cache activations
             if not skip_cache:
-                print(f"Caching activations for layer {layer}...")
-                cache_mmlu_activations(
-                    prompt_name=prompt_name,
-                    layer_idx=layer,
-                    token_position=token_position,
-                    num_examples=num_examples,
-                    filter_reliable=filter_reliable,
-                    reliable_questions_file=reliable_questions_file
-                )
+                # Check if cache already exists
+                cache_exists = check_cache_exists(prompt_name, layer, token_position, num_examples, filter_reliable)
+                
+                if cache_exists:
+                    print(f"✓ Cache already exists for layer {layer}, skipping activation caching")
+                else:
+                    print(f"Caching activations for layer {layer}...")
+                    cache_mmlu_activations(
+                        prompt_name=prompt_name,
+                        layer_idx=layer,
+                        token_position=token_position,
+                        num_examples=num_examples,
+                        filter_reliable=filter_reliable,
+                        reliable_questions_file=reliable_questions_file
+                    )
             else:
-                print(f"⏩ Skipping cache (using existing)")
+                print(f"⏩ Skipping cache (--skip-cache flag)")
 
             # Step 2: Run analysis
             if not skip_analysis:
@@ -173,17 +213,23 @@ def sweep_positions(
         try:
             # Step 1: Cache activations
             if not skip_cache:
-                print(f"Caching activations for position '{position}'...")
-                cache_mmlu_activations(
-                    prompt_name=prompt_name,
-                    layer_idx=layer,
-                    token_position=position,
-                    num_examples=num_examples,
-                    filter_reliable=filter_reliable,
-                    reliable_questions_file=reliable_questions_file
-                )
+                # Check if cache already exists
+                cache_exists = check_cache_exists(prompt_name, layer, position, num_examples, filter_reliable)
+                
+                if cache_exists:
+                    print(f"✓ Cache already exists for position '{position}', skipping activation caching")
+                else:
+                    print(f"Caching activations for position '{position}'...")
+                    cache_mmlu_activations(
+                        prompt_name=prompt_name,
+                        layer_idx=layer,
+                        token_position=position,
+                        num_examples=num_examples,
+                        filter_reliable=filter_reliable,
+                        reliable_questions_file=reliable_questions_file
+                    )
             else:
-                print(f"⏩ Skipping cache (using existing)")
+                print(f"⏩ Skipping cache (--skip-cache flag)")
 
             # Step 2: Run analysis
             if not skip_analysis:
@@ -233,17 +279,20 @@ def generate_layer_comparison(prompt_name: str, layers: List[int], token_positio
     cache_prompt_name = f"{prompt_name}_filtered" if filter_reliable else prompt_name
 
     results = {}
+    filter_suffix = "filtered" if filter_reliable else "unfiltered"
+    
     for layer in layers:
         # Load metadata
         metadata_file = os.path.join(
             config.CACHED_ACTIVATIONS_DIR,
+            prompt_name,
             cache_prompt_name,
-            f"mmlu_layer{layer:02d}_pos-{token_position}_n{num_examples}_metadata.json"
+            f"mmlu_layer{layer:02d}_pos-{token_position}_n{num_examples}_{filter_suffix}_metadata.json"
         )
         # Load AUROC
         auroc_file = os.path.join(
             config.RESULTS_DIR,
-            f"auroc_layer{layer}_pos-{token_position}_n{num_examples}.json"
+            f"auroc_layer{layer}_pos-{token_position}_n{num_examples}_{filter_suffix}.json"
         )
 
         if os.path.exists(metadata_file):
@@ -258,7 +307,7 @@ def generate_layer_comparison(prompt_name: str, layers: List[int], token_positio
         if os.path.exists(auroc_file):
             with open(auroc_file, 'r') as f:
                 auroc_data = json.load(f)
-                results[layer]['auroc'] = auroc_data.get('auroc', None)
+                results[layer] = {'auroc': auroc_data.get('auroc', None)}
 
     # Print table
     print(f"{'Layer':<10} {'AUROC':<12} {'Accuracy':<12} {'Correct':<10} {'Incorrect':<10}")
@@ -286,10 +335,12 @@ def generate_layer_comparison(prompt_name: str, layers: List[int], token_positio
         print(f"\n🏆 BEST LAYER: Layer {best_layer} (AUROC = {best_auroc:.4f})")
 
     # Save report
-    report_file = os.path.join(config.RESULTS_DIR, "layer_sweep_summary.txt")
+    report_file = os.path.join(config.RESULTS_DIR, f"layer_sweep_summary_{filter_suffix}.txt")
     with open(report_file, 'w') as f:
         f.write(f"LAYER SWEEP SUMMARY\n")
         f.write(f"Model: {config.MODEL_SHORT_NAME}\n")
+        f.write(f"Prompt: {prompt_name}\n")
+        f.write(f"Filtered: {filter_reliable}\n")
         f.write(f"Token Position: {token_position}\n")
         f.write(f"Examples: {num_examples}\n")
         f.write(f"{'=' * 80}\n\n")
@@ -322,14 +373,14 @@ def generate_position_comparison(prompt_name: str, positions: List[str], layer: 
     print(f"Examples: {num_examples}")
     print(f"{'=' * 80}\n")
     
-    # Use filtered cache directory if requested (not needed here since we only check AUROC)
+    filter_suffix = "filtered" if filter_reliable else "unfiltered"
 
     results = {}
     for position in positions:
         # Load AUROC
         auroc_file = os.path.join(
             config.RESULTS_DIR,
-            f"auroc_layer{layer}_pos-{position}_n{num_examples}.json"
+            f"auroc_layer{layer}_pos-{position}_n{num_examples}_{filter_suffix}.json"
         )
 
         if os.path.exists(auroc_file):
@@ -358,10 +409,12 @@ def generate_position_comparison(prompt_name: str, positions: List[str], layer: 
         print(f"\n🏆 BEST POSITION: {best_position} (AUROC = {best_auroc:.4f})")
 
     # Save report
-    report_file = os.path.join(config.RESULTS_DIR, f"position_sweep_layer{layer}_summary.txt")
+    report_file = os.path.join(config.RESULTS_DIR, f"position_sweep_layer{layer}_summary_{filter_suffix}.txt")
     with open(report_file, 'w') as f:
         f.write(f"TOKEN POSITION SWEEP SUMMARY\n")
         f.write(f"Model: {config.MODEL_SHORT_NAME}\n")
+        f.write(f"Prompt: {prompt_name}\n")
+        f.write(f"Filtered: {filter_reliable}\n")
         f.write(f"Layer: {layer}\n")
         f.write(f"Examples: {num_examples}\n")
         f.write(f"{'=' * 80}\n\n")
@@ -385,19 +438,25 @@ if __name__ == "__main__":
                         help="Sweep mode: 'layers' or 'positions'")
     parser.add_argument("--prompt", type=str, default="50-50",
                         help="Prompt name to use (e.g., 'benign', '50-50') (default: 50-50)")
-    parser.add_argument("--layers", type=int, nargs="+", default=[10, 12, 13, 14, 16],
-                        help="Layers to sweep (default: [10, 12, 13, 14, 16])")
-    parser.add_argument("--positions", type=str, nargs="+", default=["last", "first", "middle"],
-                        help="Positions to sweep (default: ['last', 'first', 'middle'])")
+    parser.add_argument("--layers", type=int, nargs="+", default=config.DEFAULT_LAYER_SWEEP,
+                        help=f"Layers to sweep (default: {config.DEFAULT_LAYER_SWEEP})")
+    parser.add_argument("--positions", type=str, nargs="+", default=config.DEFAULT_POSITION_SWEEP,
+                        help=f"Positions to sweep (default: {config.DEFAULT_POSITION_SWEEP})")
     parser.add_argument("--layer", type=int, help=f"Layer for position sweep (default: {config.DEFAULT_LAYER})")
-    parser.add_argument("--position", type=str, default="last",
-                        help="Position for layer sweep (default: 'last')")
+    parser.add_argument("--position", type=str, default=config.DEFAULT_TOKEN_POSITION,
+                        help=f"Position for layer sweep (default: {config.DEFAULT_TOKEN_POSITION})")
     parser.add_argument("--num-examples", type=int, help=f"Number of examples (default: {config.DEFAULT_NUM_EXAMPLES})")
     parser.add_argument("--skip-cache", action="store_true", help="Skip caching (use existing)")
     parser.add_argument("--skip-analysis", action="store_true", help="Skip analysis (only cache)")
     parser.add_argument("--quick", action="store_true", help="Quick sweep: layers 10-16")
-    parser.add_argument("--filtered", action="store_true",
-                        help="Filter to only reliable questions (questions with 100%% pass rate)")
+    
+    # Filtered flag - defaults to True
+    filter_group = parser.add_mutually_exclusive_group()
+    filter_group.add_argument("--filtered", dest="filtered", action="store_true", default=True,
+                        help="Filter to only reliable questions (questions with 100%% pass rate) (default)")
+    filter_group.add_argument("--no-filter", "--unfiltered", dest="filtered", action="store_false",
+                        help="Use all questions (unfiltered)")
+    
     parser.add_argument("--reliable-questions-file", type=str,
                         help=f"Path to reliable questions JSON file (default: experiments/{config.MODEL_SHORT_NAME}/reliable_questions.json)")
 

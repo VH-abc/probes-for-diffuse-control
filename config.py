@@ -28,8 +28,10 @@ TEMPERATURE = 1.0  # Sampling temperature
 
 # Experiment parameters
 DEFAULT_LAYER = 13
-DEFAULT_NUM_EXAMPLES = 2000
+DEFAULT_NUM_EXAMPLES = 200
 DEFAULT_TOKEN_POSITION = "last"  # Options: "last", "first", "middle", "all"
+DEFAULT_LAYER_SWEEP = [10]
+DEFAULT_POSITION_SWEEP = ["last", "first", "middle"]
 
 # Probe training parameters
 PROBE_MAX_ITER = 1000
