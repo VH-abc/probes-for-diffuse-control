@@ -15,7 +15,7 @@ The generation caching system **automatically saves and reuses model completions
 **The cache is keyed by high-level parameters, NOT by actual prompt content:**
 
 - **Model** (e.g., `gemma-3-12b`)
-- **Prompt format** (e.g., `benign`, `50/50`)
+- **Prompt format** (e.g., `benign`, `50-50`)
 - **Subject type** (e.g., `all`, `math`, `nonmath`, `math_and_nonmath`)
 - **Number of samples** (e.g., 200)
 - **Temperature** and **max_tokens**
@@ -27,7 +27,7 @@ The generation caching system **automatically saves and reuses model completions
 ✅ **Sample count tracking**: Different sample counts don't interfere
 ❌ **Intentional regeneration**: Changing prompt format requires regeneration (as expected)
 
-**Example**: If you cache 200 generations with the "50/50" prompt on all subjects, then later run the same experiment with *different* 200 questions but same prompt/model/subject/count, it will reuse the cache. This is the intended behavior!
+**Example**: If you cache 200 generations with the "50-50" prompt on all subjects, then later run the same experiment with *different* 200 questions but same prompt/model/subject/count, it will reuse the cache. This is the intended behavior!
 
 ## 📁 Cache Location
 
@@ -38,9 +38,9 @@ experiments/{model_short_name}/generations/{prompt_name}/{subject_type}/
 
 Example:
 ```
-experiments/gemma-3-12b/generations/50/50/all/n200_t1.0_maxtok512_full_texts.npy
-experiments/gemma-3-12b/generations/50/50/all/n200_t1.0_maxtok512_completions.npy
-experiments/gemma-3-12b/generations/50/50/all/n200_t1.0_maxtok512_metadata.json
+experiments/gemma-3-12b/generations/50-50/all/n200_t1.0_maxtok512_full_texts.npy
+experiments/gemma-3-12b/generations/50-50/all/n200_t1.0_maxtok512_completions.npy
+experiments/gemma-3-12b/generations/50-50/all/n200_t1.0_maxtok512_metadata.json
 experiments/gemma-3-12b/generations/benign/math_and_nonmath/n400_t1.0_maxtok512_full_texts.npy
 ...
 ```
@@ -55,11 +55,11 @@ The cache filename encodes:
 ### Before Caching:
 ```bash
 # Layer 10 sweep
-python cache_activations.py --prompt "50/50" --layer 10  # Generates 200 completions
+python cache_activations.py --prompt "50-50" --layer 10  # Generates 200 completions
 # Layer 11 sweep  
-python cache_activations.py --prompt "50/50" --layer 11  # Regenerates SAME 200 completions
+python cache_activations.py --prompt "50-50" --layer 11  # Regenerates SAME 200 completions
 # Layer 12 sweep
-python cache_activations.py --prompt "50/50" --layer 12  # Regenerates SAME 200 completions
+python cache_activations.py --prompt "50-50" --layer 12  # Regenerates SAME 200 completions
 ```
 
 **Total time**: ~3x generation time + 3x activation extraction
@@ -67,11 +67,11 @@ python cache_activations.py --prompt "50/50" --layer 12  # Regenerates SAME 200 
 ### After Caching:
 ```bash
 # Layer 10 sweep
-python cache_activations.py --prompt "50/50" --layer 10  # Generates 200 completions (first time)
+python cache_activations.py --prompt "50-50" --layer 10  # Generates 200 completions (first time)
 # Layer 11 sweep
-python cache_activations.py --prompt "50/50" --layer 11  # ✓ Loads cached completions!
+python cache_activations.py --prompt "50-50" --layer 11  # ✓ Loads cached completions!
 # Layer 12 sweep
-python cache_activations.py --prompt "50/50" --layer 12  # ✓ Loads cached completions!
+python cache_activations.py --prompt "50-50" --layer 12  # ✓ Loads cached completions!
 ```
 
 **Total time**: 1x generation time + 3x activation extraction
@@ -84,13 +84,13 @@ Caching is **enabled by default**. Just run your commands normally:
 
 ```bash
 # First run - generates and caches
-python cache_activations.py --prompt "50/50" --layer 10
+python cache_activations.py --prompt "50-50" --layer 10
 
 # Second run - uses cached generations (even with different questions!)
-python cache_activations.py --prompt "50/50" --layer 11
+python cache_activations.py --prompt "50-50" --layer 11
 
 # Layer sweep - only generates once!
-python sweep_layers.py --prompt "50/50" --layers 10 11 12 13 14
+python sweep_layers.py --prompt "50-50" --layers 10 11 12 13 14
 ```
 
 ### Subject Types
@@ -104,14 +104,14 @@ Different subject types create separate caches:
 ### Cache Reuse Rules
 
 Cache is reused when:
-✅ Same prompt format (e.g., both use "50/50")
+✅ Same prompt format (e.g., both use "50-50")
 ✅ Same model
 ✅ Same subject type (e.g., both use "all")
 ✅ Same number of samples
 ✅ Same temperature and max_tokens
 
 Cache is NOT reused when:
-❌ Different prompt format ("benign" vs "50/50")
+❌ Different prompt format ("benign" vs "50-50")
 ❌ Different model
 ❌ Different subject type ("all" vs "math")
 ❌ Different number of samples (200 vs 400)
@@ -123,10 +123,10 @@ To force regeneration (if needed), delete the cache:
 
 ```bash
 # Delete all cached generations for a specific prompt and subject
-rm -rf experiments/gemma-3-12b/generations/50/50/all/
+rm -rf experiments/gemma-3-12b/generations/50-50/all/
 
 # Delete all cached generations for a prompt
-rm -rf experiments/gemma-3-12b/generations/50/50/
+rm -rf experiments/gemma-3-12b/generations/50-50/
 
 # Delete all cached generations
 rm -rf experiments/gemma-3-12b/generations/
@@ -141,10 +141,10 @@ When running a script, you'll see:
 ============================================================
 Checking for cached generations...
   Model: gemma-3-12b
-  Prompt: 50/50
+  Prompt: 50-50
   Subject: all
   Samples: 200
-  Cache path: experiments/gemma-3-12b/generations/50/50/all/n200_t1.0_maxtok512
+  Cache path: experiments/gemma-3-12b/generations/50-50/all/n200_t1.0_maxtok512
 ============================================================
 
 ✓ Found cached generations!
@@ -160,10 +160,10 @@ Checking for cached generations...
 ============================================================
 Checking for cached generations...
   Model: gemma-3-12b
-  Prompt: 50/50
+  Prompt: 50-50
   Subject: all
   Samples: 200
-  Cache path: experiments/gemma-3-12b/generations/50/50/all/n200_t1.0_maxtok512
+  Cache path: experiments/gemma-3-12b/generations/50-50/all/n200_t1.0_maxtok512
 ============================================================
   No cache found - will generate and save
 
@@ -172,7 +172,7 @@ Distributing 200 prompts across 8 VLLM servers
 ...
 [Generation happens]
 ...
-  💾 Saving generations to cache: experiments/gemma-3-12b/generations/50/50/all/n200_t1.0_maxtok512
+  💾 Saving generations to cache: experiments/gemma-3-12b/generations/50-50/all/n200_t1.0_maxtok512
   ✓ Cached 200 generations
 ```
 
@@ -188,7 +188,7 @@ find experiments/gemma-3-12b/generations -name "*_metadata.json" -exec cat {} \;
 du -sh experiments/gemma-3-12b/generations/
 
 # List caches by prompt
-ls -lh experiments/gemma-3-12b/generations/50/50/
+ls -lh experiments/gemma-3-12b/generations/50-50/
 ls -lh experiments/gemma-3-12b/generations/benign/
 ```
 
@@ -227,19 +227,19 @@ cache_file = f"n{num_samples}_t{temperature}_maxtok{max_tokens}"
 
 ```bash
 # 1. First layer sweep - generates completions
-python sweep_layers.py --prompt "50/50" --layers 10 11 12 13 14 --num-examples 200
+python sweep_layers.py --prompt "50-50" --layers 10 11 12 13 14 --num-examples 200
 # Generation happens once, then reused for layers 11-14
 
 # 2. Re-run for different token position - reuses same completions!
-python cache_activations.py --prompt "50/50" --layer 13 --position first
+python cache_activations.py --prompt "50-50" --layer 13 --position first
 # ✓ Loads cached generations
 
 # 3. Try different layer - still reuses!
-python cache_activations.py --prompt "50/50" --layer 20 --position last
+python cache_activations.py --prompt "50-50" --layer 20 --position last
 # ✓ Loads cached generations
 
 # 4. Run with different questions but same parameters - STILL REUSES!
-python cache_activations.py --prompt "50/50" --layer 10
+python cache_activations.py --prompt "50-50" --layer 10
 # ✓ Loads cached generations (even if questions are different)
 
 # 5. Change prompt - new cache created

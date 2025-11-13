@@ -20,7 +20,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Compare all positions at layer 13 (uses 50/50 prompt by default)
+  # Compare all positions at layer 13 (uses 50-50 prompt by default)
   python3 run_position_sweep.py --layer 13
   
   # Compare all positions with benign prompt
@@ -40,8 +40,8 @@ Examples:
     parser.add_argument(
         "--prompt",
         type=str,
-        default="50/50",
-        help="Prompt name to use (e.g., 'benign', '50/50') (default: 50/50)"
+        default="50-50",
+        help="Prompt name to use (e.g., 'benign', '50-50') (default: 50-50)"
     )
     
     parser.add_argument(

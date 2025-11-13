@@ -51,14 +51,14 @@ ACTIVATION_GPUS = [0, 1, 2, 3]    # Same 4 GPUs for activation
 **Usage:**
 ```bash
 # 1. Generate completions (only happens once due to caching)
-python cache_activations.py --prompt "50/50" --layer 10
+python cache_activations.py --prompt "50-50" --layer 10
 
 # 2. Kill VLLM servers
 pkill -f vllm
 
 # 3. Extract activations for other layers (uses cached generations)
-python cache_activations.py --prompt "50/50" --layer 11
-python cache_activations.py --prompt "50/50" --layer 12
+python cache_activations.py --prompt "50-50" --layer 11
+python cache_activations.py --prompt "50-50" --layer 12
 ```
 
 ### Option 3: Minimal GPUs for VLLM
@@ -90,14 +90,14 @@ VLLM_NUM_SERVERS = 1             # Only 1 VLLM server
 **Usage:**
 ```bash
 # Generate completions
-python cache_activations.py --prompt "50/50" --layer 10
+python cache_activations.py --prompt "50-50" --layer 10
 
 # Kill VLLM to free memory
 pkill -f vllm
 
 # Extract activations
 # (Re-run same command - will use cached generations)
-python cache_activations.py --prompt "50/50" --layer 10
+python cache_activations.py --prompt "50-50" --layer 10
 ```
 
 ## 🚀 How It Works
@@ -268,7 +268,7 @@ pkill -f vllm
 
 **Solution 3**: Reduce batch size
 ```bash
-python cache_activations.py --prompt "50/50" --layer 10 --batch-size 1
+python cache_activations.py --prompt "50-50" --layer 10 --batch-size 1
 ```
 
 ### Issue: VLLM servers not starting
@@ -298,7 +298,7 @@ print(f"Using activation GPUs: {config.ACTIVATION_GPUS}")
 bash vllm_launcher.sh
 
 # Run layer sweep (generation + activation for each layer)
-python sweep_layers.py --prompt "50/50" --layers 10 11 12 13 14
+python sweep_layers.py --prompt "50-50" --layers 10 11 12 13 14
 
 # VLLM and activation run simultaneously with no conflicts!
 ```
@@ -312,16 +312,17 @@ python sweep_layers.py --prompt "50/50" --layers 10 11 12 13 14
 bash vllm_launcher.sh
 
 # First layer (generates and caches completions)
-python cache_activations.py --prompt "50/50" --layer 10
+python cache_activations.py --prompt "50-50" --layer 10
 
 # Kill VLLM to free memory
 pkill -f vllm
 
 # Subsequent layers (use cached completions, no VLLM needed)
-python cache_activations.py --prompt "50/50" --layer 11
-python cache_activations.py --prompt "50/50" --layer 12
-python cache_activations.py --prompt "50/50" --layer 13
+python cache_activations.py --prompt "50-50" --layer 11
+python cache_activations.py --prompt "50-50" --layer 12
+python cache_activations.py --prompt "50-50" --layer 13
 
 # Generation happened once, activation extraction 4 times
 ```
+
 

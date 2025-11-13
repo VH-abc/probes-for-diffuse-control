@@ -22,7 +22,7 @@ if not os.path.exists("mmlu_data"):
     download_mmlu()
 
 def sweep_layers(
-    prompt_name: str = "50/50",
+    prompt_name: str = "50-50",
     layers: List[int] = None,
     token_position: str = "last",
     num_examples: int = None,
@@ -35,7 +35,7 @@ def sweep_layers(
     Sweep across multiple layers.
 
     Args:
-        prompt_name: Name of the prompt to use (e.g., "benign", "50/50") - defaults to "50/50"
+        prompt_name: Name of the prompt to use (e.g., "benign", "50-50") - defaults to "50-50"
         layers: List of layer indices to sweep
         token_position: Token position to use
         num_examples: Number of examples
@@ -120,7 +120,7 @@ def sweep_layers(
 
 
 def sweep_positions(
-    prompt_name: str = "50/50",
+    prompt_name: str = "50-50",
     positions: List[str] = None,
     layer: int = None,
     num_examples: int = None,
@@ -133,7 +133,7 @@ def sweep_positions(
     Sweep across multiple token positions.
 
     Args:
-        prompt_name: Name of the prompt to use (e.g., "benign", "50/50") - defaults to "50/50"
+        prompt_name: Name of the prompt to use (e.g., "benign", "50-50") - defaults to "50-50"
         positions: List of token positions to sweep
         layer: Layer to use
         num_examples: Number of examples
@@ -383,8 +383,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sweep layers and token positions")
     parser.add_argument("--mode", type=str, choices=["layers", "positions"], default="layers",
                         help="Sweep mode: 'layers' or 'positions'")
-    parser.add_argument("--prompt", type=str, default="50/50",
-                        help="Prompt name to use (e.g., 'benign', '50/50') (default: 50/50)")
+    parser.add_argument("--prompt", type=str, default="50-50",
+                        help="Prompt name to use (e.g., 'benign', '50-50') (default: 50-50)")
     parser.add_argument("--layers", type=int, nargs="+", default=[10, 12, 13, 14, 16],
                         help="Layers to sweep (default: [10, 12, 13, 14, 16])")
     parser.add_argument("--positions", type=str, nargs="+", default=["last", "first", "middle"],

@@ -139,7 +139,7 @@ def get_generation_cache_path(
     
     Args:
         model_short_name: Short name of model (e.g., "gemma-3-12b")
-        prompt_name: Name of prompt (e.g., "benign", "50/50")
+        prompt_name: Name of prompt (e.g., "benign", "50-50")
         subject_type: Type of subjects (e.g., "all", "math", "nonmath")
         num_samples: Number of samples
         max_new_tokens: Max tokens to generate
@@ -184,11 +184,34 @@ def save_generations_to_cache(
     with open(f"{cache_path}_completions.json", 'w', encoding='utf-8') as f:
         json.dump(completions, f, indent=2, ensure_ascii=False)
     
+    # Save as Markdown for easy browsing
+    with open(f"{cache_path}_full_texts.md", 'w', encoding='utf-8') as f:
+        f.write(f"# Full Texts (Prompt + Completion)\n\n")
+        f.write(f"**Model:** {metadata.get('model_name', 'unknown')}\n")
+        f.write(f"**Generated:** {metadata.get('timestamp', 'unknown')}\n")
+        f.write(f"**Count:** {len(full_texts)}\n\n")
+        f.write("---\n\n")
+        for i, text in enumerate(full_texts, 1):
+            f.write(f"## Generation {i}\n\n")
+            f.write(f"{text}\n\n")
+            f.write("---\n\n")
+    
+    with open(f"{cache_path}_completions.md", 'w', encoding='utf-8') as f:
+        f.write(f"# Completions Only\n\n")
+        f.write(f"**Model:** {metadata.get('model_name', 'unknown')}\n")
+        f.write(f"**Generated:** {metadata.get('timestamp', 'unknown')}\n")
+        f.write(f"**Count:** {len(completions)}\n\n")
+        f.write("---\n\n")
+        for i, completion in enumerate(completions, 1):
+            f.write(f"## Completion {i}\n\n")
+            f.write(f"{completion}\n\n")
+            f.write("---\n\n")
+    
     # Save metadata as JSON
     with open(f"{cache_path}_metadata.json", 'w') as f:
         json.dump(metadata, f, indent=2)
     
-    print(f"  ✓ Cached {len(full_texts)} generations (numpy + JSON)")
+    print(f"  ✓ Cached {len(full_texts)} generations (numpy + JSON + markdown)")
 
 
 def load_generations_from_cache(
@@ -251,7 +274,7 @@ def generate_with_vllm_multi_server(
         max_concurrent_requests: Max concurrent requests per server
         use_cache: Whether to use cached generations (default: True)
         model_short_name: Short model name for cache organization
-        prompt_name: Prompt name for cache organization (e.g., "benign", "50/50")
+        prompt_name: Prompt name for cache organization (e.g., "benign", "50-50")
         subject_type: Subject type for cache organization (e.g., "all", "math", "nonmath")
 
     Returns:

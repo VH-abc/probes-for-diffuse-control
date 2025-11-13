@@ -57,15 +57,15 @@ ACTIVATION_GPUS = [4, 5, 6, 7]
 
 1. **First Generation**:
    ```bash
-   python cache_activations.py --prompt "50/50" --layer 10
+   python cache_activations.py --prompt "50-50" --layer 10
    ```
    - Generates 200 completions
-   - Saves to: `experiments/gemma-3-12b/generations/50/50/{cache_key}_*`
+   - Saves to: `experiments/gemma-3-12b/generations/50-50/{cache_key}_*`
    - Proceeds with activation extraction
 
 2. **Subsequent Runs**:
    ```bash
-   python cache_activations.py --prompt "50/50" --layer 11
+   python cache_activations.py --prompt "50-50" --layer 11
    ```
    - **Detects cached generations** ✨
    - Loads from disk (instant!)
@@ -82,7 +82,7 @@ experiments/
         │   └── {cache_key}_full_texts.npy
         │   └── {cache_key}_completions.npy
         │   └── {cache_key}_metadata.json
-        └── 50/50/
+        └── 50-50/
             └── {cache_key}_full_texts.npy
             └── {cache_key}_completions.npy
             └── {cache_key}_metadata.json
@@ -102,7 +102,7 @@ Hash of:
 
 - ✅ **Massive speedup** for layer sweeps
 - ✅ **Automatic** - no flags needed
-- ✅ **Separate per prompt** - "benign" and "50/50" don't conflict
+- ✅ **Separate per prompt** - "benign" and "50-50" don't conflict
 - ✅ **Persistent** - survives across sessions
 
 ### Example
@@ -110,13 +110,13 @@ Hash of:
 **Without caching:**
 ```bash
 # Layer sweep - 8 layers × 5 min = 40 min generation time
-python sweep_layers.py --prompt "50/50" --layers 10 11 12 13 14 15 16 17
+python sweep_layers.py --prompt "50-50" --layers 10 11 12 13 14 15 16 17
 ```
 
 **With caching:**
 ```bash
 # Layer sweep - 1 × 5 min generation, rest instant!
-python sweep_layers.py --prompt "50/50" --layers 10 11 12 13 14 15 16 17
+python sweep_layers.py --prompt "50-50" --layers 10 11 12 13 14 15 16 17
 # First layer: 5 min generation + activation
 # Layers 11-17: Instant load + activation only
 ```
@@ -139,10 +139,10 @@ python sweep_layers.py --prompt "50/50" --layers 10 11 12 13 14 15 16 17
 
 ```bash
 # Use default (batch_size=1)
-python cache_activations.py --prompt "50/50" --layer 10
+python cache_activations.py --prompt "50-50" --layer 10
 
 # Or override if you have more memory
-python cache_activations.py --prompt "50/50" --layer 10 --batch-size 2
+python cache_activations.py --prompt "50-50" --layer 10 --batch-size 2
 ```
 
 ---
@@ -165,7 +165,7 @@ ACTIVATION_GPUS = [4, 5, 6, 7]  # 4 GPUs for activation
 bash vllm_launcher.sh
 
 # Run layer sweep - everything works simultaneously!
-python sweep_layers.py --prompt "50/50" --layers 10 11 12 13 14 15 16
+python sweep_layers.py --prompt "50-50" --layers 10 11 12 13 14 15 16
 
 # First layer: Generates completions (cached) + extracts activations
 # Layers 11-16: Loads cached completions + extracts activations
@@ -188,15 +188,15 @@ ACTIVATION_GPUS = [0, 1, 2, 3]  # Same GPUs for activation
 bash vllm_launcher.sh
 
 # Generate completions (only happens once due to caching)
-python cache_activations.py --prompt "50/50" --layer 10
+python cache_activations.py --prompt "50-50" --layer 10
 
 # Kill VLLM to free memory
 pkill -f vllm
 
 # Extract activations for all other layers (uses cached generations)
-python cache_activations.py --prompt "50/50" --layer 11
-python cache_activations.py --prompt "50/50" --layer 12
-python cache_activations.py --prompt "50/50" --layer 13
+python cache_activations.py --prompt "50-50" --layer 11
+python cache_activations.py --prompt "50-50" --layer 12
+python cache_activations.py --prompt "50-50" --layer 13
 # All instant! No regeneration needed.
 ```
 
@@ -237,17 +237,17 @@ python cache_activations.py --prompt "50/50" --layer 13
 3. **Run experiments**:
    ```bash
    # First run - generates and caches
-   python cache_activations.py --prompt "50/50" --layer 10
+   python cache_activations.py --prompt "50-50" --layer 10
    
    # Subsequent runs - uses cache
-   python cache_activations.py --prompt "50/50" --layer 11
-   python cache_activations.py --prompt "50/50" --layer 12
+   python cache_activations.py --prompt "50-50" --layer 11
+   python cache_activations.py --prompt "50-50" --layer 12
    ```
 
 4. **Layer sweeps**:
    ```bash
    # All layers use the same cached generations!
-   python sweep_layers.py --prompt "50/50" --layers 10 11 12 13 14 15 16
+   python sweep_layers.py --prompt "50-50" --layers 10 11 12 13 14 15 16
    ```
 
 ---
@@ -308,4 +308,5 @@ python cache_activations.py --prompt "50/50" --layer 13
 - `GENERATION_CACHING.md` - Caching system details
 - `TROUBLESHOOTING_OOM.md` - OOM error solutions
 - `README.md` - General project documentation
+
 

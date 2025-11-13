@@ -31,7 +31,7 @@ See `GPU_ALLOCATION.md` for detailed configuration options.
 The default batch size has been changed from 4 to 1. You can also override it:
 
 ```bash
-python cache_activations.py --prompt "50/50" --layer 10 --batch-size 1
+python cache_activations.py --prompt "50-50" --layer 10 --batch-size 1
 ```
 
 ### 3. **Shut Down VLLM Servers During Activation Extraction** (RECOMMENDED if GPUs overlap)
@@ -42,7 +42,7 @@ VLLM servers use 50% of GPU memory. Free it before extraction:
 pkill -f vllm
 
 # Run activation caching
-python cache_activations.py --prompt "50/50" --layer 10
+python cache_activations.py --prompt "50-50" --layer 10
 
 # Restart VLLM servers when done
 bash vllm_launcher.sh
@@ -52,16 +52,16 @@ bash vllm_launcher.sh
 This gives each GPU more memory:
 
 ```bash
-python cache_activations.py --prompt "50/50" --layer 10 --num-gpus 4
+python cache_activations.py --prompt "50-50" --layer 10 --num-gpus 4
 # Or even fewer:
-python cache_activations.py --prompt "50/50" --layer 10 --num-gpus 2
+python cache_activations.py --prompt "50-50" --layer 10 --num-gpus 2
 ```
 
 ### 5. **Process Fewer Examples**
 Reduce the dataset size temporarily:
 
 ```bash
-python cache_activations.py --prompt "50/50" --layer 10 --num-examples 100
+python cache_activations.py --prompt "50-50" --layer 10 --num-examples 100
 ```
 
 ### 6. **Reduce VLLM Memory Usage** (If you need VLLM running)
@@ -82,10 +82,10 @@ Split your work into smaller batches:
 
 ```bash
 # First 100 examples
-python cache_activations.py --prompt "50/50" --layer 10 --num-examples 100
+python cache_activations.py --prompt "50-50" --layer 10 --num-examples 100
 
 # Then combine the results manually or run on different layers
-python cache_activations.py --prompt "50/50" --layer 11 --num-examples 100
+python cache_activations.py --prompt "50-50" --layer 11 --num-examples 100
 ```
 
 ## 📊 Memory Usage Breakdown
@@ -105,7 +105,7 @@ For `google/gemma-3-12b-it` model (12B parameters):
 ```bash
 # 1. Generate completions with VLLM
 bash vllm_launcher.sh
-python cache_activations.py --prompt "50/50" --layer 10 --num-examples 200
+python cache_activations.py --prompt "50-50" --layer 10 --num-examples 200
 # (This will only run generation, then fail at activation extraction)
 
 # 2. Stop VLLM servers
@@ -119,12 +119,12 @@ pkill -f vllm
 ```bash
 # Edit config.py: VLLM_GPU_MEMORY_UTILIZATION = 0.3
 bash vllm_launcher.sh
-python cache_activations.py --prompt "50/50" --layer 10 --batch-size 1
+python cache_activations.py --prompt "50-50" --layer 10 --batch-size 1
 ```
 
 **Option C: Use Fewer GPUs**
 ```bash
-python cache_activations.py --prompt "50/50" --layer 10 --num-gpus 2 --batch-size 1
+python cache_activations.py --prompt "50-50" --layer 10 --num-gpus 2 --batch-size 1
 ```
 
 ## 🛠️ New Features Added
@@ -156,6 +156,6 @@ nvidia-smi
 Try this nuclear option - use only 1 GPU:
 ```bash
 pkill -f vllm  # Stop VLLM
-CUDA_VISIBLE_DEVICES=0 python cache_activations.py --prompt "50/50" --layer 10 --num-gpus 1 --batch-size 1 --num-examples 50
+CUDA_VISIBLE_DEVICES=0 python cache_activations.py --prompt "50-50" --layer 10 --num-gpus 1 --batch-size 1 --num-examples 50
 ```
 

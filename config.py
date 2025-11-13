@@ -14,7 +14,8 @@ VLLM_BASE_PORT = 8100
 VLLM_NUM_SERVERS = 8
 VLLM_MAX_MODEL_LEN = 2000
 VLLM_GPU_MEMORY_UTILIZATION = 0.5
-VLLM_GPUS = [0, 1, 2, 3]  # GPUs for VLLM servers (e.g., [0,1,2,3] or list(range(4)))
+VLLM_GPUS = list(range(8))  # GPUs for VLLM servers (e.g., [0,1,2,3] or list(range(4)))
+ACTIVATION_GPUS = list(range(8))  # GPUs for activation extraction (should not overlap with VLLM_GPUS)
 
 # Directory structure (model-specific)
 BASE_DIR = "experiments"
@@ -22,12 +23,12 @@ CACHED_ACTIVATIONS_DIR = f"{BASE_DIR}/{MODEL_SHORT_NAME}/cached_activations"
 RESULTS_DIR = f"{BASE_DIR}/{MODEL_SHORT_NAME}/results"
 
 # Generation parameters
-MAX_NEW_TOKENS = 100
+MAX_NEW_TOKENS = 1000 #100
 TEMPERATURE = 1.0  # Sampling temperature
 
 # Experiment parameters
 DEFAULT_LAYER = 13
-DEFAULT_NUM_EXAMPLES = 200
+DEFAULT_NUM_EXAMPLES = 2000
 DEFAULT_TOKEN_POSITION = "last"  # Options: "last", "first", "middle", "all"
 
 # Probe training parameters
@@ -37,10 +38,6 @@ PROBE_RANDOM_STATE = 42
 # Multiprocessing parameters
 MAX_CONCURRENT_REQUESTS_PER_SERVER = 10  # For VLLM API calls
 ACTIVATION_BATCH_SIZE = 1  # Batch size for activation extraction (reduce if OOM)
-
-# GPU allocation (to avoid OOM by separating VLLM and activation extraction)
-ACTIVATION_GPUS = [4, 5, 6, 7]  # GPUs for activation extraction (should not overlap with VLLM_GPUS)
-
 
 def get_config():
     """Return a dictionary with all configuration settings."""

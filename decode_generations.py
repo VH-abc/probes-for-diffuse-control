@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Decode cached numpy generation files to human-readable JSON format.
+Decode cached numpy generation files to human-readable JSON and Markdown formats.
 
-This script finds all cached generation files (*.npy) and converts them to JSON
-for easy human inspection. The JSON files are saved alongside the numpy files
-with the same naming convention.
+This script finds all cached generation files (*.npy) and converts them to both
+JSON and Markdown for easy human inspection. The output files are saved alongside
+the numpy files with the same naming convention.
 
 Usage:
     python decode_generations.py                    # Decode all cached generations
@@ -20,13 +20,14 @@ import numpy as np
 from typing import Optional
 
 
-def decode_generation_file(npy_path: str, limit: Optional[int] = None) -> bool:
+def decode_generation_file(npy_path: str, limit: Optional[int] = None, metadata: Optional[dict] = None) -> bool:
     """
-    Decode a single numpy generation file to JSON.
+    Decode a single numpy generation file to JSON and Markdown.
     
     Args:
         npy_path: Path to .npy file
         limit: Optional limit on number of items to save (for large files)
+        metadata: Optional metadata dict for markdown headers
     
     Returns:
         True if successful, False otherwise
@@ -38,19 +39,44 @@ def decode_generation_file(npy_path: str, limit: Optional[int] = None) -> bool:
         # Convert to list
         data_list = data.tolist()
         
+        original_count = len(data_list)
+        
         # Apply limit if specified
         if limit is not None and len(data_list) > limit:
-            print(f"    (limiting to first {limit} items)")
+            print(f"    (limiting to first {limit} of {original_count} items)")
             data_list = data_list[:limit]
         
-        # Determine output path
+        # Determine output paths
         json_path = npy_path.replace('.npy', '.json')
+        md_path = npy_path.replace('.npy', '.md')
         
         # Save as JSON
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(data_list, f, indent=2, ensure_ascii=False)
         
-        print(f"  ✓ Decoded {len(data_list)} items to {json_path}")
+        # Save as Markdown
+        with open(md_path, 'w', encoding='utf-8') as f:
+            # Determine if this is full_texts or completions
+            is_completions = 'completions' in npy_path
+            title = "Completions Only" if is_completions else "Full Texts (Prompt + Completion)"
+            
+            f.write(f"# {title}\n\n")
+            if metadata:
+                f.write(f"**Model:** {metadata.get('model_name', 'unknown')}\n")
+                f.write(f"**Generated:** {metadata.get('timestamp', 'unknown')}\n")
+            f.write(f"**Count:** {len(data_list)}")
+            if limit and original_count > limit:
+                f.write(f" (showing first {limit} of {original_count})")
+            f.write("\n\n")
+            f.write("---\n\n")
+            
+            for i, text in enumerate(data_list, 1):
+                label = "Completion" if is_completions else "Generation"
+                f.write(f"## {label} {i}\n\n")
+                f.write(f"{text}\n\n")
+                f.write("---\n\n")
+        
+        print(f"  ✓ Decoded {len(data_list)} items to JSON and Markdown")
         return True
         
     except Exception as e:
@@ -96,7 +122,7 @@ def decode_all_generations(
     dry_run: bool = False
 ):
     """
-    Decode all cached generation files to JSON.
+    Decode all cached generation files to JSON and Markdown.
     
     Args:
         base_dir: Base directory to search
@@ -133,6 +159,7 @@ def decode_all_generations(
     for npy_path in generation_files:
         # Check if JSON already exists
         json_path = npy_path.replace('.npy', '.json')
+        md_path = npy_path.replace('.npy', '.md')
         
         # Skip metadata files (those are already JSON)
         if 'metadata' in npy_path:
@@ -140,16 +167,28 @@ def decode_all_generations(
         
         print(f"Processing: {npy_path}")
         
-        if os.path.exists(json_path) and not dry_run:
-            print(f"  ⊙ JSON already exists (skipping)")
+        if os.path.exists(json_path) and os.path.exists(md_path) and not dry_run:
+            print(f"  ⊙ JSON and Markdown already exist (skipping)")
             skip_count += 1
             continue
         
         if dry_run:
-            print(f"  Would decode to: {json_path}")
+            print(f"  Would decode to:")
+            print(f"    - {json_path}")
+            print(f"    - {md_path}")
             success_count += 1
         else:
-            if decode_generation_file(npy_path, limit):
+            # Load metadata if available
+            metadata_path = npy_path.rsplit('_', 2)[0] + '_metadata.json'
+            metadata = None
+            if os.path.exists(metadata_path):
+                try:
+                    with open(metadata_path, 'r') as f:
+                        metadata = json.load(f)
+                except:
+                    pass
+            
+            if decode_generation_file(npy_path, limit, metadata):
                 success_count += 1
         
         print()
@@ -165,7 +204,7 @@ def decode_all_generations(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Decode cached numpy generation files to JSON",
+        description="Decode cached numpy generation files to JSON and Markdown",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
@@ -197,15 +236,18 @@ def main():
     
     args = parser.parse_args()
     
-    # If force is specified, temporarily rename existing files
-    # (simpler: just delete .json files if --force)
+    # If force is specified, delete existing JSON and Markdown files
     if args.force and not args.dry_run:
         generation_files = find_generation_files(args.base_dir, args.model)
         for npy_path in generation_files:
             json_path = npy_path.replace('.npy', '.json')
+            md_path = npy_path.replace('.npy', '.md')
             if os.path.exists(json_path):
                 os.remove(json_path)
                 print(f"Removed existing: {json_path}")
+            if os.path.exists(md_path):
+                os.remove(md_path)
+                print(f"Removed existing: {md_path}")
     
     decode_all_generations(
         base_dir=args.base_dir,

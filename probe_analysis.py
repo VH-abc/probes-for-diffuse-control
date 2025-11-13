@@ -41,7 +41,7 @@ def load_cached_activations(prompt_name: str, layer_idx: int, token_position: st
     Load cached MMLU activations.
 
     Args:
-        prompt_name: Name of the prompt used (e.g., "benign", "50/50") - REQUIRED
+        prompt_name: Name of the prompt used (e.g., "benign", "50-50") - REQUIRED
         layer_idx: Layer index
         token_position: Token position
         num_examples: Number of examples
@@ -52,7 +52,8 @@ def load_cached_activations(prompt_name: str, layer_idx: int, token_position: st
     """
     # Use filtered cache directory if requested
     cache_prompt_name = f"{prompt_name}_filtered" if filter_reliable else prompt_name
-    prefix = f"mmlu_layer{layer_idx:02d}_pos-{token_position}_n{num_examples}"
+    filter_suffix = "filtered" if filter_reliable else "unfiltered"
+    prefix = f"mmlu_layer{layer_idx:02d}_pos-{token_position}_n{num_examples}_{filter_suffix}"
     cache_dir = os.path.join(config.CACHED_ACTIVATIONS_DIR, cache_prompt_name)
     
     activations_file = os.path.join(cache_dir, f"{prefix}_activations.npy")
@@ -93,7 +94,7 @@ def run_probe_analysis(
     Run complete probe analysis pipeline.
 
     Args:
-        prompt_name: Name of the prompt used (e.g., "benign", "50/50") - REQUIRED
+        prompt_name: Name of the prompt used (e.g., "benign", "50-50") - REQUIRED
         layer: Layer index
         token_position: Token position
         num_examples: Number of examples
@@ -136,7 +137,9 @@ def run_probe_analysis(
     train_subjects = subjects[:split] if subjects is not None else None
     train_prompts = prompts[:split] if prompts is not None else None
 
-    fname = f"layer{layer}_pos-{token_position}_n{num_examples}"
+    # Include filtered/unfiltered status in filename
+    filter_suffix = "filtered" if filter_reliable else "unfiltered"
+    fname = f"layer{layer}_pos-{token_position}_n{num_examples}_{filter_suffix}"
 
     # Experiment 1: Linear Probe
     if "linear_probe" not in skip_experiments:
@@ -211,7 +214,7 @@ def run_probe_analysis(
 
         results = measure_auroc_vs_training_size(
             activations, labels,
-            n_values=[16, 32, 64, 128],
+            n_values=None,
             n_trials=10,
             max_iter=config.PROBE_MAX_ITER,
             random_state=config.PROBE_RANDOM_STATE
@@ -258,7 +261,7 @@ def run_probe_analysis(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Probe analysis for cached activations")
     parser.add_argument("--prompt", type=str, required=True,
-                        help="Prompt name to use (e.g., 'benign', '50/50') - REQUIRED")
+                        help="Prompt name to use (e.g., 'benign', '50-50') - REQUIRED")
     parser.add_argument("--layer", type=int, help=f"Layer index (default: {config.DEFAULT_LAYER})")
     parser.add_argument("--position", type=str, choices=["last", "first", "middle", "all"],
                         help=f"Token position (default: {config.DEFAULT_TOKEN_POSITION})")
