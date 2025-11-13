@@ -120,6 +120,7 @@ def extract_activations_single_gpu(
             low_cpu_mem_usage=True,  # Reduces CPU memory during loading
             local_files_only=use_cache  # Don't re-download if cached
         )
+        print(f"[GPU {gpu_id}] Model loaded on device: {device} == {model.device}")
         load_time = time.time() - load_start
         print(f"[GPU {gpu_id}] Model loaded in {load_time:.2f}s")
 
@@ -176,6 +177,10 @@ def extract_activations_single_gpu(
                         final_activation = layer_output[0, pos, :].float().cpu().numpy()
 
                     activations_list.append(final_activation)
+                
+                # Clear CUDA cache periodically to prevent OOM
+                if batch_end % 50 == 0:
+                    torch.cuda.empty_cache()
 
         total_time = time.time() - start_time
         rate = len(full_texts) / total_time if total_time > 0 else 0
@@ -195,7 +200,8 @@ def extract_activations_multi_gpu(
     token_position: TokenPosition = "last",
     num_gpus: int = 8,
     batch_size: int = 4,
-    use_model_cache: bool = True
+    use_model_cache: bool = True,
+    gpu_ids: List[int] = None
 ) -> np.ndarray:
     """
     Extract activations from a specific layer using multiple GPUs in parallel.
@@ -205,15 +211,23 @@ def extract_activations_multi_gpu(
         full_texts: List of full generated texts (prompt + completion)
         layer_idx: Which layer to extract activations from
         token_position: Which token position to extract ("last", "first", "middle", "all")
-        num_gpus: Number of GPUs to use
+        num_gpus: Number of GPUs to use (if gpu_ids not specified)
         batch_size: Batch size for processing (reduces overhead)
         use_model_cache: Use cached model files (faster loading)
+        gpu_ids: Specific GPU IDs to use (e.g., [4,5,6,7]). If None, uses 0..num_gpus-1
 
     Returns:
         activations: Array of activations (num_prompts, hidden_dim)
     """
+    # Determine which GPUs to use
+    if gpu_ids is None:
+        gpu_ids = list(range(num_gpus))
+    else:
+        num_gpus = len(gpu_ids)
+    
     print(f"\n{'='*60}")
     print(f"Distributing {len(full_texts)} texts across {num_gpus} GPUs for activation extraction")
+    print(f"GPU IDs: {gpu_ids}")
     print(f"Layer: {layer_idx}, Token position: {token_position}")
     print(f"Batch size: {batch_size}, Model cache: {'enabled' if use_model_cache else 'disabled'}")
     print(f"{'='*60}")
@@ -234,11 +248,12 @@ def extract_activations_multi_gpu(
 
     # Create and start processes
     processes = []
-    for gpu_id, chunk in enumerate(text_chunks):
+    for i, chunk in enumerate(text_chunks):
+        gpu_id = gpu_ids[i]
         p = mp.Process(
             target=extract_activations_single_gpu,
             args=(gpu_id, model_name, chunk, layer_idx, token_position,
-                  return_dict, gpu_id, batch_size, use_model_cache)
+                  return_dict, i, batch_size, use_model_cache)
         )
         p.start()
         processes.append(p)

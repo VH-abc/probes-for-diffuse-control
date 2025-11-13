@@ -20,8 +20,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Compare all positions at layer 13
+  # Compare all positions at layer 13 (uses 50-50 prompt by default)
   python3 run_position_sweep.py --layer 13
+  
+  # Compare all positions with benign prompt
+  python3 run_position_sweep.py --prompt benign --layer 13
   
   # Compare specific positions at layer 15 with 500 examples
   python3 run_position_sweep.py --layer 15 --positions last first middle --num-examples 500
@@ -32,6 +35,13 @@ Examples:
   # Quick test with 20 examples
   python3 run_position_sweep.py --layer 13 --num-examples 20
         """
+    )
+    
+    parser.add_argument(
+        "--prompt",
+        type=str,
+        default="50-50",
+        help="Prompt name to use (e.g., 'benign', '50-50') (default: 50-50)"
     )
     
     parser.add_argument(
@@ -87,6 +97,7 @@ Examples:
     print("TOKEN POSITION SWEEP")
     print("=" * 80)
     print(f"Model: {config.MODEL_SHORT_NAME}")
+    print(f"Prompt: {args.prompt}")
     print(f"Layer: {args.layer}")
     print(f"Positions: {positions}")
     print(f"Examples: {args.num_examples}")
@@ -115,6 +126,7 @@ Examples:
     # Run the sweep
     try:
         sweep_positions(
+            prompt_name=args.prompt,
             positions=positions,
             layer=args.layer,
             num_examples=args.num_examples,

@@ -5,6 +5,7 @@ Download the MMLU (Massive Multitask Language Understanding) dataset.
 from datasets import load_dataset
 import os
 import json
+import random
 
 def download_mmlu():
     """
@@ -42,8 +43,18 @@ def download_mmlu():
         # Rename auxiliary_train to train
         split_name = "train" if split == "auxiliary_train" else split
         output_path = os.path.join(data_dir, f"{split_name}.json")
-        dataset[split].to_json(output_path)
-        print(f"  Saved {split} split to {output_path}")
+        
+        # Convert to list and shuffle
+        data_list = list(dataset[split])
+        random.seed(42)  # Fixed seed for reproducibility
+        random.shuffle(data_list)
+        
+        # Save as JSONL
+        with open(output_path, 'w') as f:
+            for item in data_list:
+                f.write(json.dumps(item) + '\n')
+        
+        print(f"  Saved {split} split to {output_path} (shuffled)")
 
     return dataset
 

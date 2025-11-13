@@ -14,6 +14,8 @@ VLLM_BASE_PORT = 8100
 VLLM_NUM_SERVERS = 8
 VLLM_MAX_MODEL_LEN = 2000
 VLLM_GPU_MEMORY_UTILIZATION = 0.5
+VLLM_GPUS = list(range(8))  # GPUs for VLLM servers (e.g., [0,1,2,3] or list(range(4)))
+ACTIVATION_GPUS = list(range(8))  # GPUs for activation extraction (should not overlap with VLLM_GPUS)
 
 # Directory structure (model-specific)
 BASE_DIR = "experiments"
@@ -21,13 +23,15 @@ CACHED_ACTIVATIONS_DIR = f"{BASE_DIR}/{MODEL_SHORT_NAME}/cached_activations"
 RESULTS_DIR = f"{BASE_DIR}/{MODEL_SHORT_NAME}/results"
 
 # Generation parameters
-MAX_NEW_TOKENS = 100
+MAX_NEW_TOKENS = 1000 #100
 TEMPERATURE = 1.0  # Sampling temperature
 
 # Experiment parameters
 DEFAULT_LAYER = 13
 DEFAULT_NUM_EXAMPLES = 200
 DEFAULT_TOKEN_POSITION = "last"  # Options: "last", "first", "middle", "all"
+DEFAULT_LAYER_SWEEP = [10]
+DEFAULT_POSITION_SWEEP = ["last", "first", "middle"]
 
 # Probe training parameters
 PROBE_MAX_ITER = 1000
@@ -35,8 +39,7 @@ PROBE_RANDOM_STATE = 42
 
 # Multiprocessing parameters
 MAX_CONCURRENT_REQUESTS_PER_SERVER = 10  # For VLLM API calls
-ACTIVATION_BATCH_SIZE = 4  # Batch size for activation extraction
-
+ACTIVATION_BATCH_SIZE = 1  # Batch size for activation extraction (reduce if OOM)
 
 def get_config():
     """Return a dictionary with all configuration settings."""
@@ -47,6 +50,8 @@ def get_config():
         "vllm_num_servers": VLLM_NUM_SERVERS,
         "vllm_max_model_len": VLLM_MAX_MODEL_LEN,
         "vllm_gpu_memory_utilization": VLLM_GPU_MEMORY_UTILIZATION,
+        "vllm_gpus": VLLM_GPUS,
+        "activation_gpus": ACTIVATION_GPUS,
         "cached_activations_dir": CACHED_ACTIVATIONS_DIR,
         "results_dir": RESULTS_DIR,
         "max_new_tokens": MAX_NEW_TOKENS,

@@ -54,9 +54,9 @@ def plot_score_distribution(
         title: Plot title
     """
     plt.figure(figsize=(10, 6))
-    plt.hist(scores[labels == 1], bins=50, alpha=0.6, color='red',
+    plt.hist(scores[labels == 1], bins=50, alpha=0.6, color='green',
              label='Correct (Class 1)', density=True, edgecolor='black', linewidth=0.5)
-    plt.hist(scores[labels == 0], bins=50, alpha=0.6, color='green',
+    plt.hist(scores[labels == 0], bins=50, alpha=0.6, color='red',
              label='Incorrect (Class 0)', density=True, edgecolor='black', linewidth=0.5)
     plt.xlabel('Classifier Score', fontsize=12)
     plt.ylabel('Density', fontsize=12)
@@ -72,7 +72,8 @@ def plot_pca(
     X: np.ndarray,
     y: np.ndarray,
     output_path: str,
-    title: str = "PCA Visualization"
+    title: str = "PCA Visualization",
+    names: dict = {0: "Incorrect", 1: "Correct"}
 ):
     """
     Plot PCA projection of activations.
@@ -88,9 +89,9 @@ def plot_pca(
     explained_var = pca.explained_variance_ratio_
 
     plt.figure(figsize=(10, 8))
-    plt.scatter(X_pca[y == 0, 0], X_pca[y == 0, 1], c='green', label='Incorrect (0)',
+    plt.scatter(X_pca[y == 0, 0], X_pca[y == 0, 1], c='red', label=f'{names[0]} (0)',
                 alpha=0.6, s=100, edgecolors='black', linewidth=0.5)
-    plt.scatter(X_pca[y == 1, 0], X_pca[y == 1, 1], c='red', label='Correct (1)',
+    plt.scatter(X_pca[y == 1, 0], X_pca[y == 1, 1], c='green', label=f'{names[1]} (1)',
                 alpha=0.6, s=100, edgecolors='black', linewidth=0.5)
     plt.xlabel(f'PC1 ({explained_var[0]:.1%} variance)', fontsize=12)
     plt.ylabel(f'PC2 ({explained_var[1]:.1%} variance)', fontsize=12)
