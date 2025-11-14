@@ -19,7 +19,10 @@ from collections import defaultdict
 import config
 from lib.data import load_mmlu_data, compute_correctness_labels
 from lib.generation import generate_with_vllm_multi_server
+from download_mmlu import download_mmlu
 
+if not os.path.exists("mmlu_data"):
+    download_mmlu()
 
 def identify_reliable_questions(
     num_trials: int = 5,
@@ -29,7 +32,7 @@ def identify_reliable_questions(
     num_gpus: int = None,
     mmlu_file: str = "mmlu_data/train.json",
     output_file: str = None,
-    batch_size: int = 500
+    mandated_batch_size: int = None
 ):
     """
     Identify questions with 100% pass rate across multiple trials.
@@ -43,7 +46,7 @@ def identify_reliable_questions(
         num_gpus: Number of GPUs
         mmlu_file: Path to MMLU data file
         output_file: Path to save reliable question indices
-        batch_size: Number of questions to test per batch
+        mandated_batch_size: Number of questions to test per batch
         
     Returns:
         reliable_indices: List of question indices with 100% pass rate
@@ -61,7 +64,7 @@ def identify_reliable_questions(
     print(f"\nParameters:")
     print(f"  Trials per question: {num_trials}")
     print(f"  Target reliable questions: {target_reliable}")
-    print(f"  Batch size: {batch_size}")
+    print(f"  Batch size: {mandated_batch_size}")
     print(f"  Temperature: {temperature} (low for consistency)")
     print(f"  Max New Tokens: {max_new_tokens}")
     print("=" * 80)
@@ -71,7 +74,7 @@ def identify_reliable_questions(
     all_questions, all_prompts = load_mmlu_data(mmlu_file, num_examples=None, prompt_name="benign")
     total_available = len(all_prompts)
     print(f"Total available questions: {total_available}")
-    print(f"Will test in batches of {batch_size} until we have {target_reliable} reliable questions")
+    print(f"Will test in batches of {mandated_batch_size if mandated_batch_size else 'variable size'} until we have {target_reliable} reliable questions")
     
     # Process questions in batches until we have enough reliable ones
     reliable_indices = []
@@ -81,6 +84,13 @@ def identify_reliable_questions(
     batch_num = 0
     
     while len(reliable_indices) < target_reliable and questions_tested < total_available:
+        if mandated_batch_size is None:
+            # as many as required still + 100
+            estimated_fraction_valid = 0.7
+            batch_size = min(int(target_reliable/estimated_fraction_valid) - len(reliable_indices) + 100, total_available - questions_tested)
+        else:
+            batch_size = mandated_batch_size
+
         batch_num += 1
         # Get next batch of questions
         batch_start = questions_tested
@@ -235,8 +245,8 @@ if __name__ == "__main__":
     parser.add_argument("--num-trials", type=int, default=10,
                         help="Number of trials per question (default: 10)")
     parser.add_argument("--num-examples", type=int, help=f"Target number of reliable questions to find (default: {config.DEFAULT_NUM_EXAMPLES})")
-    parser.add_argument("--batch-size", type=int, default=500,
-                        help="Number of questions to test per batch (default: 500)")
+    parser.add_argument("--batch-size", type=int,
+                        help="Number of questions to test per batch (default: None)")
     parser.add_argument("--temperature", type=float,
                         help=f"Temperature for generation (default: {config.TEMPERATURE})")
     parser.add_argument("--max-tokens", type=int, help=f"Max new tokens (default: {config.MAX_NEW_TOKENS})")
@@ -255,6 +265,6 @@ if __name__ == "__main__":
         num_gpus=args.num_gpus,
         mmlu_file=args.mmlu_file,
         output_file=args.output_file,
-        batch_size=args.batch_size
+        mandated_batch_size=args.batch_size
     )
 

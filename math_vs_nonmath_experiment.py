@@ -460,7 +460,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--model", type=str, help=f"Model name (default: {config.MODEL_NAME})")
     parser.add_argument("--layer", type=int, help=f"Layer index (default: {config.DEFAULT_LAYER})")
-    parser.add_argument("--position", type=str, choices=["last", "first", "middle", "all"],
+    parser.add_argument("--position", type=str, choices=config.SUPPORTED_POSITIONS,
                         help=f"Token position (default: {config.DEFAULT_TOKEN_POSITION})")
     parser.add_argument("--num-per-class", type=int, default=100,
                         help="Number of examples per class (default: 100)")

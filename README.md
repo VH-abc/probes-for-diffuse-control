@@ -89,14 +89,17 @@ python3 probe_analysis.py --layer 15 --position first --num-examples 500
 ### 7. Sweep Across Layers/Positions
 
 ```bash
-# Sweep across multiple layers
-python3 sweep_layers.py --mode layers --layers 10 12 14 16
+# Sweep arbitrary (layer, position) pairs
+python3 sweep.py --pairs 10,last 12,first 13,middle 14,last
 
-# Sweep across token positions
-python3 sweep_layers.py --mode positions --positions last first middle
+# Sweep across multiple layers at one position
+python3 sweep.py --layers 10 12 14 16 --position last
 
-# Quick sweep (layers 10-16)
-python3 sweep_layers.py --quick
+# Sweep across token positions at one layer
+python3 sweep.py --positions last first middle --layer 13
+
+# Quick sweep (layers 10-16 at last token)
+python3 sweep.py --quick
 ```
 
 ## Project Structure
@@ -106,7 +109,7 @@ rewritten/
 ├── config.py                 # Central configuration
 ├── cache_activations.py      # Cache activations from VLLM
 ├── probe_analysis.py          # Probe training and evaluation
-├── sweep_layers.py            # Sweep layers/positions
+├── sweep.py                   # Sweep layers/positions
 ├── vllm_launcher.sh           # Launch VLLM servers
 ├── requirements.txt           # Python dependencies
 ├── lib/                       # Core library
@@ -139,7 +142,7 @@ All settings are in `config.py`:
 ### Experiment Configuration
 - `DEFAULT_LAYER`: Default layer to probe
 - `DEFAULT_NUM_EXAMPLES`: Default number of MMLU examples
-- `DEFAULT_TOKEN_POSITION`: Token position ("last", "first", "middle", "all")
+- `DEFAULT_TOKEN_POSITION`: Token position (e.g. "last", "first", "middle", "all")
 - `TEMPERATURE`: Sampling temperature (1.0 = default)
 
 ## Token Position Support
@@ -204,10 +207,10 @@ bash vllm_launcher.sh
 curl http://localhost:8100/v1/models
 
 # 2. Quick layer sweep
-python3 sweep_layers.py --quick
+python3 sweep.py --quick
 
 # 3. Token position comparison at best layer
-python3 sweep_layers.py --mode positions --layer 13 --positions last first middle
+python3 sweep.py --positions last first middle --layer 13
 
 # 4. Detailed analysis of best configuration
 python3 probe_analysis.py --layer 13 --position last --num-examples 500

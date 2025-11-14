@@ -125,7 +125,7 @@ def cache_mmlu_activations(
     print(f"\n{'=' * 80}")
     print(f"STEP 2: Extracting activations")
     print(f"{'=' * 80}")
-    activations = extract_activations_multi_gpu(
+    activations, probed_tokens = extract_activations_multi_gpu(
         model_name=model_name,
         full_texts=generated_texts,
         layer_idx=layer_idx,
@@ -133,7 +133,8 @@ def cache_mmlu_activations(
         num_gpus=num_gpus,
         batch_size=batch_size,
         use_model_cache=True,
-        gpu_ids=config.ACTIVATION_GPUS  # Use dedicated activation GPUs
+        gpu_ids=config.ACTIVATION_GPUS,  # Use dedicated activation GPUs
+        completions=completions_only  # Pass completions for letter token position
     )
 
     print(f"\n{'=' * 80}")
@@ -172,6 +173,7 @@ def cache_mmlu_activations(
         "completions": (f"{output_prefix}_completions.npy", np.array(completions_only)),
         "predicted_answers": (f"{output_prefix}_predicted_answers.npy", np.array(predicted_answers)),
         "correct_answer_indices": (f"{output_prefix}_correct_answer_indices.npy", np.array(correct_answer_indices)),
+        "probed_tokens": (f"{output_prefix}_probed_tokens.npy", np.array(probed_tokens, dtype=object)),
     }
 
     print(f"\nSaving cached data...")
@@ -189,6 +191,17 @@ def cache_mmlu_activations(
     saved_files['questions'] = questions_file
     print(f"  ✓ questions: {questions_file}")
 
+    # Compute probed token statistics
+    probed_token_stats = {}
+    if probed_tokens and any(probed_tokens):
+        from collections import Counter
+        token_counts = Counter(probed_tokens)
+        probed_token_stats = {
+            "unique_tokens": len(token_counts),
+            "most_common": token_counts.most_common(10),
+            "total": len(probed_tokens)
+        }
+    
     # Save metadata
     metadata = {
         "model_name": model_name,
@@ -206,6 +219,7 @@ def cache_mmlu_activations(
         "num_correct": int(num_correct),
         "num_incorrect": int(num_incorrect),
         "accuracy": float(accuracy),
+        "probed_token_stats": probed_token_stats,
         "description": f"MMLU activations at layer {layer_idx}, token position '{token_position}', prompt '{prompt_name}'{' (filtered to reliable questions)' if filter_reliable else ''}. Labels: 1=correct, 0=incorrect.",
         "files": saved_files
     }
@@ -233,7 +247,7 @@ if __name__ == "__main__":
                         help="Prompt name to use (e.g., 'benign', '50-50') - REQUIRED")
     parser.add_argument("--model", type=str, help=f"Model name (default: {config.MODEL_NAME})")
     parser.add_argument("--layer", type=int, help=f"Layer index (default: {config.DEFAULT_LAYER})")
-    parser.add_argument("--position", type=str, choices=["last", "first", "middle", "all"],
+    parser.add_argument("--position", type=str,
                         help=f"Token position (default: {config.DEFAULT_TOKEN_POSITION})")
     parser.add_argument("--num-examples", type=int, help=f"Number of examples (default: {config.DEFAULT_NUM_EXAMPLES})")
     parser.add_argument("--max-tokens", type=int, help=f"Max new tokens (default: {config.MAX_NEW_TOKENS})")

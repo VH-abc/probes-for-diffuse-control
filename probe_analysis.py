@@ -140,6 +140,12 @@ def run_probe_analysis(
     train_subjects = subjects[:split] if subjects is not None else None
     train_prompts = prompts[:split] if prompts is not None else None
 
+    # Print the number of train and test examples
+    print(f"  Training set: {len(X_train)} samples")
+    print(f"    Correct: {np.sum(y_train)}, Incorrect: {len(y_train) - np.sum(y_train)}")
+    print(f"  Test set: {len(X_test)} samples")
+    print(f"    Correct: {np.sum(y_test)}, Incorrect: {len(y_test) - np.sum(y_test)}")
+
     # Include filtered/unfiltered status in filename
     filter_suffix = "filtered" if filter_reliable else "unfiltered"
     fname = f"layer{layer}_pos-{token_position}_n{num_examples}_{filter_suffix}"
@@ -266,7 +272,7 @@ if __name__ == "__main__":
     parser.add_argument("--prompt", type=str, required=True,
                         help="Prompt name to use (e.g., 'benign', '50-50') - REQUIRED")
     parser.add_argument("--layer", type=int, help=f"Layer index (default: {config.DEFAULT_LAYER})")
-    parser.add_argument("--position", type=str, choices=["last", "first", "middle", "all"],
+    parser.add_argument("--position", type=str, choices=config.SUPPORTED_POSITIONS,
                         help=f"Token position (default: {config.DEFAULT_TOKEN_POSITION})")
     parser.add_argument("--num-examples", type=int, help=f"Number of examples (default: {config.DEFAULT_NUM_EXAMPLES})")
     parser.add_argument("--skip", type=str, nargs="+", 
