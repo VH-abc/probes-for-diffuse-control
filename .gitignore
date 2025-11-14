@@ -50,7 +50,7 @@ htmlcov/
 .ipynb_checkpoints/
 
 # Project-specific
-experiments/
+experiments/*/generations/
 mmlu_data/
 
 # mypy

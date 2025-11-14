@@ -43,12 +43,12 @@ MAX_NEW_TOKENS = 1000 #100
 TEMPERATURE = 1.0  # Sampling temperature
 
 # Experiment parameters
-DEFAULT_LAYER = 13
+DEFAULT_LAYER = 24
 DEFAULT_NUM_EXAMPLES = 2000
 DEFAULT_TOKEN_POSITION = "last"
 DEFAULT_LAYER_SWEEP = [0, 2, 5, 10, 20, 30, 36, 42, 45, 47]
 SUPPORTED_POSITIONS = ["last", "first", "middle", "all", "all_appended", "letter"]
-DEFAULT_POSITION_SWEEP = ["last", "first", "middle", "letter"]
+DEFAULT_POSITION_SWEEP = ["last", "first", "middle", "letter", "all_appended"]
 
 # Probe training parameters
 PROBE_MAX_ITER = 1000
