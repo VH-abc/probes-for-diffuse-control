@@ -52,9 +52,10 @@ htmlcov/
 # Project-specific
 experiments/*/generations/
 experiments/*/cached_activations/
-experiments/*/old-bugged/
+experiments/*/old*/
 experiments/*/results/*/*.png
 mmlu_data/
+*.npy
 
 # mypy
 .mypy_cache/
