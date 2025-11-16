@@ -34,7 +34,7 @@ def identify_reliable_questions(
     temperature: float = None,
     max_new_tokens: int = None,
     num_gpus: int = None,
-    mmlu_file: str = "mmlu_data/train.json",
+    mmlu_file: str = config.MMLU_FILE,
     output_file: str = None,
     mandated_batch_size: int = None
 ):

@@ -21,7 +21,7 @@ ACTIVATION_GPUS = list(range(1, 8))  # GPUs for activation extraction (should no
 BASE_DIR = "experiments"
 CACHED_ACTIVATIONS_DIR = f"{BASE_DIR}/{MODEL_SHORT_NAME}/cached_activations"
 RESULTS_DIR = f"{BASE_DIR}/{MODEL_SHORT_NAME}/results"  # Base results directory
-
+MMLU_FILE = "mmlu_data/test.json"
 
 def get_results_dir(num_examples: int = None, filter_reliable: bool = False) -> str:
     """
@@ -43,9 +43,9 @@ MAX_NEW_TOKENS = 100 #900 #100
 TEMPERATURE = 1.0  # Sampling temperature
 
 # Experiment parameters
-DEFAULT_LAYER = 47
+DEFAULT_LAYER = 30
 DEFAULT_NUM_EXAMPLES = 2000
-DEFAULT_TOKEN_POSITION = "letter+1"
+DEFAULT_TOKEN_POSITION = "letter"
 # ["linear_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
 DEFAULT_EXPERIMENTS = ["linear_probe"] #["linear_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
 
@@ -70,6 +70,9 @@ PROBE_RANDOM_STATE = 42
 # Multiprocessing parameters
 MAX_CONCURRENT_REQUESTS_PER_SERVER = 10  # For VLLM API calls
 ACTIVATION_BATCH_SIZE = 1000 # Batch size for activation extraction (reduce if OOM)
+
+# Visualization parameters
+N_ANNOTATE = 30
 
 def get_config():
     """Return a dictionary with all configuration settings."""

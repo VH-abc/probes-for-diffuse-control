@@ -36,7 +36,7 @@ def cache_mmlu_activations_unified(
     temperature: float = None,
     num_gpus: int = None,
     batch_size: int = None,
-    mmlu_file: str = "mmlu_data/train.json",
+    mmlu_file: str = config.MMLU_FILE,
     filter_reliable: bool = False,
     reliable_questions_file: str = None
 ):
@@ -308,7 +308,7 @@ if __name__ == "__main__":
                         help="Number of GPUs")
     parser.add_argument("--batch-size", type=int, default=None,
                         help="Batch size for activation extraction")
-    parser.add_argument("--mmlu-file", type=str, default="mmlu_data/train.json",
+    parser.add_argument("--mmlu-file", type=str, default=config.MMLU_FILE,
                         help="Path to MMLU data file")
     parser.add_argument("--filtered", action="store_true",
                         help="Filter to only reliable questions")

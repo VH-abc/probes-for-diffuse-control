@@ -267,11 +267,14 @@ def run_math_vs_nonmath_experiment(
     questions = [questions[i] for i in idx]
     prompts = [prompts[i] for i in idx]
     generated_texts = [generated_texts[i] for i in idx]
+    probed_tokens_list = [probed_tokens[i] for i in idx]
     
     # Split train/test (50/50)
     split = len(activations) // 2
     X_train, X_test = activations[:split], activations[split:]
     y_train, y_test = labels[:split], labels[split:]
+    test_generated = generated_texts[split:]
+    test_probed_tokens = probed_tokens_list[split:]
     
     print(f"  Training set: {len(X_train)} samples")
     print(f"    Math: {np.sum(y_train)}, Non-math: {len(y_train) - np.sum(y_train)}")
@@ -365,7 +368,10 @@ def run_math_vs_nonmath_experiment(
     plot_pca(
         X_test, y_test,
         os.path.join(experiment_dir, f"{output_prefix}_pca.png"),
-        f"PCA - Math vs Non-Math (Layer {layer_idx})"
+        f"PCA - Math vs Non-Math (Layer {layer_idx})",
+        names={0: "Non-Math", 1: "Math"},
+        generated_texts=test_generated,
+        probed_tokens=test_probed_tokens
     )
     print(f"  ✓ PCA visualization")
     

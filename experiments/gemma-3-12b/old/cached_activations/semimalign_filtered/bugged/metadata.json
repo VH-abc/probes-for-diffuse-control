@@ -1,0 +1,182 @@
+{
+  "cache_type": "unified",
+  "model_name": "google/gemma-3-12b-it",
+  "model_short_name": "gemma-3-12b",
+  "prompt_name": "semimalign",
+  "cache_prompt_name": "semimalign_filtered",
+  "filter_reliable": true,
+  "reliable_questions_file": "experiments/gemma-3-12b/reliable_questions.json",
+  "layer_indices": [
+    0,
+    2,
+    5,
+    10,
+    15,
+    20,
+    25,
+    30,
+    36,
+    42,
+    45,
+    47
+  ],
+  "positions_cached": [
+    "last",
+    "first",
+    "middle",
+    "letter",
+    "letter+1"
+  ],
+  "num_examples": 2000,
+  "max_new_tokens": 100,
+  "temperature": 1.0,
+  "num_correct": 837,
+  "num_incorrect": 1163,
+  "accuracy": 0.4185,
+  "probed_token_stats": {
+    "last": {
+      "unique_tokens": 49,
+      "most_common": [
+        [
+          "}",
+          1046
+        ],
+        [
+          "\n",
+          867
+        ],
+        [
+          "\n\n",
+          8
+        ],
+        [
+          " ",
+          7
+        ],
+        [
+          "0",
+          4
+        ],
+        [
+          ":",
+          4
+        ],
+        [
+          " \\",
+          4
+        ],
+        [
+          "{",
+          3
+        ],
+        [
+          " at",
+          3
+        ],
+        [
+          "?",
+          3
+        ]
+      ],
+      "total": 2000
+    },
+    "first": {
+      "unique_tokens": 1,
+      "most_common": [
+        [
+          "You",
+          2000
+        ]
+      ],
+      "total": 2000
+    },
+    "middle": {
+      "unique_tokens": 857,
+      "most_common": [
+        [
+          ".",
+          98
+        ],
+        [
+          " the",
+          85
+        ],
+        [
+          ",",
+          65
+        ],
+        [
+          " to",
+          57
+        ],
+        [
+          " a",
+          43
+        ],
+        [
+          " in",
+          34
+        ],
+        [
+          " and",
+          29
+        ],
+        [
+          " of",
+          21
+        ],
+        [
+          "'",
+          20
+        ],
+        [
+          " is",
+          20
+        ]
+      ],
+      "total": 2000
+    },
+    "letter": {
+      "unique_tokens": 2,
+      "most_common": [
+        [
+          " an",
+          1081
+        ],
+        [
+          " AI",
+          919
+        ]
+      ],
+      "total": 2000
+    },
+    "letter+1": {
+      "unique_tokens": 2,
+      "most_common": [
+        [
+          " AI",
+          1081
+        ],
+        [
+          " that",
+          919
+        ]
+      ],
+      "total": 2000
+    }
+  },
+  "description": "Unified MMLU activations for 12 layers \u00d7 5 positions, prompt 'semimalign' (filtered to reliable questions). Labels: 1=correct, 0=incorrect.",
+  "file_structure": {
+    "activations": "activations_layer{XX}_pos-{position}.npy",
+    "probed_tokens": "probed_tokens_pos-{position}.npy",
+    "shared": [
+      "labels.npy",
+      "subjects.npy",
+      "prompts.npy",
+      "generated.npy",
+      "completions.npy",
+      "predicted_answers.npy",
+      "correct_answer_indices.npy"
+    ]
+  }
+}

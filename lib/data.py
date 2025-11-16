@@ -50,7 +50,7 @@ def load_mmlu_data(
     reliable_questions_file: Optional[str] = None
 ) -> Tuple[List[Dict], List[str]]:
     """
-    Load MMLU questions from train.json.
+    Load MMLU questions.
 
     Args:
         mmlu_file: Path to MMLU data file

@@ -1,0 +1,63 @@
+{
+  "model_name": "google/gemma-3-12b-it",
+  "model_short_name": "gemma-3-12b",
+  "prompt_name": "50-50",
+  "cache_prompt_name": "50-50_filtered",
+  "filter_reliable": true,
+  "reliable_questions_file": "experiments/gemma-3-12b/reliable_questions.json",
+  "layer_idx": 5,
+  "token_position": "letter",
+  "num_examples": 200,
+  "max_new_tokens": 100,
+  "temperature": 1.0,
+  "activation_shape": [
+    200,
+    3840
+  ],
+  "num_correct": 52,
+  "num_incorrect": 148,
+  "accuracy": 0.26,
+  "probed_token_stats": {
+    "unique_tokens": 6,
+    "most_common": [
+      [
+        " \\",
+        114
+      ],
+      [
+        "\\",
+        82
+      ],
+      [
+        " mentioned",
+        1
+      ],
+      [
+        " rectangle",
+        1
+      ],
+      [
+        " ",
+        1
+      ],
+      [
+        "}",
+        1
+      ]
+    ],
+    "total": 200
+  },
+  "description": "MMLU activations at layer 5, token position 'letter', prompt '50-50' (filtered to reliable questions). Labels: 1=correct, 0=incorrect.",
+  "files": {
+    "activations": "experiments/gemma-3-12b/cached_activations/50-50_filtered/mmlu_layer05_pos-letter_n200_filtered_activations.npy",
+    "labels": "experiments/gemma-3-12b/cached_activations/50-50_filtered/mmlu_layer05_pos-letter_n200_filtered_labels.npy",
+    "subjects": "experiments/gemma-3-12b/cached_activations/50-50_filtered/mmlu_layer05_pos-letter_n200_filtered_subjects.npy",
+    "prompts": "experiments/gemma-3-12b/cached_activations/50-50_filtered/mmlu_layer05_pos-letter_n200_filtered_prompts.npy",
+    "generated": "experiments/gemma-3-12b/cached_activations/50-50_filtered/mmlu_layer05_pos-letter_n200_filtered_generated.npy",
+    "completions": "experiments/gemma-3-12b/cached_activations/50-50_filtered/mmlu_layer05_pos-letter_n200_filtered_completions.npy",
+    "predicted_answers": "experiments/gemma-3-12b/cached_activations/50-50_filtered/mmlu_layer05_pos-letter_n200_filtered_predicted_answers.npy",
+    "correct_answer_indices": "experiments/gemma-3-12b/cached_activations/50-50_filtered/mmlu_layer05_pos-letter_n200_filtered_correct_answer_indices.npy",
+    "probed_tokens": "experiments/gemma-3-12b/cached_activations/50-50_filtered/mmlu_layer05_pos-letter_n200_filtered_probed_tokens.npy",
+    "questions": "experiments/gemma-3-12b/cached_activations/50-50_filtered/mmlu_layer05_pos-letter_n200_filtered_questions.json"
+  }
+}

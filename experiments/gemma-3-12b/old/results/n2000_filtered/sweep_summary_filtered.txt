@@ -1,0 +1,14 @@
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: semimalign
+Filtered: True
+Examples: 2000
+================================================================================
+
+Layer      Position        AUROC       
+----------------------------------------
+42         letter          0.9349      
+
+----------------------------------------
+
+🏆 BEST: Layer 42, Position 'letter' (AUROC = 0.9349)

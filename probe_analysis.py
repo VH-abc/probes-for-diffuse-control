@@ -30,6 +30,7 @@ from lib.visualization import (
     plot_roc_curve,
     plot_score_distribution,
     plot_pca,
+    plot_pca_by_subject,
     plot_auroc_vs_training_size,
     plot_label_corruption_robustness,
     save_training_analysis
@@ -51,7 +52,7 @@ def load_cached_activations(prompt_name: str, layer_idx: int, token_position: st
         filter_reliable: Whether to load filtered activations
 
     Returns:
-        activations, labels, subjects, prompts
+        activations, labels, subjects, prompts, generated, probed_tokens
     """
     # Use filtered cache directory if requested
     cache_prompt_name = f"{prompt_name}_filtered" if filter_reliable else prompt_name
@@ -88,10 +89,16 @@ def load_cached_activations(prompt_name: str, layer_idx: int, token_position: st
     subjects = np.load(subjects_file, allow_pickle=True) if os.path.exists(subjects_file) else None
     prompts = np.load(prompts_file, allow_pickle=True) if os.path.exists(prompts_file) else None
     
+    # Load generated texts and probed tokens for PCA annotations
+    generated_file = os.path.join(unified_cache_dir, "generated.npy")
+    probed_tokens_file = os.path.join(unified_cache_dir, f"probed_tokens_pos-{token_position}.npy")
+    generated = np.load(generated_file, allow_pickle=True) if os.path.exists(generated_file) else None
+    probed_tokens = np.load(probed_tokens_file, allow_pickle=True) if os.path.exists(probed_tokens_file) else None
+    
     print(f"  Shape: {activations.shape}")
     print(f"  Correct: {np.sum(labels)}/{len(labels)} ({100 * np.sum(labels) / len(labels):.1f}%)")
     
-    return activations, labels, subjects, prompts
+    return activations, labels, subjects, prompts, generated, probed_tokens
 
 
 def run_probe_analysis(
@@ -134,7 +141,7 @@ def run_probe_analysis(
     print("#" * 80)
 
     # Load data
-    activations, labels, subjects, prompts = load_cached_activations(
+    activations, labels, subjects, prompts, generated, probed_tokens = load_cached_activations(
         prompt_name, layer, token_position, num_examples, filter_reliable
     )
 
@@ -145,6 +152,8 @@ def run_probe_analysis(
     labels = labels[idx]
     subjects = subjects[idx] if subjects is not None else None
     prompts = prompts[idx] if prompts is not None else None
+    generated = generated[idx] if generated is not None else None
+    probed_tokens = probed_tokens[idx] if probed_tokens is not None else None
 
     # Split train/test
     split = len(activations) // 2
@@ -152,6 +161,9 @@ def run_probe_analysis(
     y_train, y_test = labels[:split], labels[split:]
     train_subjects = subjects[:split] if subjects is not None else None
     train_prompts = prompts[:split] if prompts is not None else None
+    test_subjects = subjects[split:] if subjects is not None else None
+    test_generated = generated[split:] if generated is not None else None
+    test_probed_tokens = probed_tokens[split:] if probed_tokens is not None else None
 
     # Print the number of train and test examples
     print(f"  Training set: {len(X_train)} samples")
@@ -207,8 +219,21 @@ def run_probe_analysis(
         plot_pca(
             X_test, y_test,
             os.path.join(results_dir, f"pca_{fname}.png"),
-            f"PCA - {fname}"
+            f"PCA - {fname}",
+            generated_texts=test_generated,
+            probed_tokens=test_probed_tokens
         )
+        
+        # Also create PCA colored by subject group
+        if test_subjects is not None:
+            print(f"  Creating PCA by subject groups...")
+            plot_pca_by_subject(
+                X_test, y_test, test_subjects,
+                os.path.join(results_dir, f"pca_by_subject_{fname}.png"),
+                f"PCA by Subject - {fname}",
+                generated_texts=test_generated,
+                probed_tokens=test_probed_tokens
+            )
 
     # Experiment 3: Anomaly Detection
     if "anomaly_detection" in experiments or experiments == "all":

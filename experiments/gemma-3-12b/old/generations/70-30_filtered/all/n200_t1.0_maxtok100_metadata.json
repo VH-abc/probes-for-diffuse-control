@@ -1,0 +1,11 @@
+{
+  "model_name": "google/gemma-3-12b-it",
+  "model_short_name": "gemma-3-12b",
+  "prompt_name": "semimalign_filtered",
+  "subject_type": "all",
+  "max_new_tokens": 100,
+  "temperature": 1.0,
+  "num_samples": 200,
+  "num_servers": 1,
+  "timestamp": "2025-11-16 00:19:04"
+}

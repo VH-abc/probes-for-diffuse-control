@@ -4,7 +4,7 @@ Visualization utilities for probe analysis.
 
 import numpy as np
 from typing import Optional
-
+import config
 
 def plot_roc_curve(
     fpr: np.ndarray,
@@ -75,16 +75,21 @@ def plot_pca(
     y: np.ndarray,
     output_path: str,
     title: str = "PCA Visualization",
-    names: dict = {0: "Incorrect", 1: "Correct"}
+    names: dict = {0: "Incorrect", 1: "Correct"},
+    generated_texts: Optional[list] = None,
+    probed_tokens: Optional[list] = None
 ):
     """
-    Plot PCA projection of activations.
+    Plot PCA projection of activations with annotated random samples.
 
     Args:
         X: Activations (n_samples, n_features)
         y: Labels (n_samples,)
         output_path: Path to save plot
         title: Plot title
+        names: Dictionary mapping labels to names
+        generated_texts: List of generated text for each sample (optional)
+        probed_tokens: List of probed tokens for each sample (optional)
     """
     import matplotlib.pyplot as plt
     from sklearn.decomposition import PCA
@@ -98,6 +103,23 @@ def plot_pca(
                 alpha=0.6, s=100, edgecolors='black', linewidth=0.5)
     plt.scatter(X_pca[y == 1, 0], X_pca[y == 1, 1], c='green', label=f'{names[1]} (1)',
                 alpha=0.6, s=100, edgecolors='black', linewidth=0.5)
+    
+    # Annotate a few random points
+    np.random.seed(42)  # For reproducibility
+    n_annotate = min(config.N_ANNOTATE, len(X))
+    random_indices = np.random.choice(len(X), size=n_annotate, replace=False)
+    
+    for i, idx in enumerate(random_indices, 1):
+        plt.annotate(
+            str(i),
+            (X_pca[idx, 0], X_pca[idx, 1]),
+            fontsize=10,
+            fontweight='bold',
+            bbox=dict(boxstyle='circle,pad=0.3', facecolor='yellow', edgecolor='black', alpha=0.8),
+            ha='center',
+            va='center'
+        )
+    
     plt.xlabel(f'PC1 ({explained_var[0]:.1%} variance)', fontsize=12)
     plt.ylabel(f'PC2 ({explained_var[1]:.1%} variance)', fontsize=12)
     plt.title(title, fontsize=14)
@@ -106,6 +128,214 @@ def plot_pca(
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
+    
+    # Generate markdown file with annotated samples
+    if generated_texts is not None:
+        markdown_path = output_path.replace('.png', '_annotated_samples.md')
+        with open(markdown_path, 'w') as f:
+            f.write(f"# Annotated PCA Samples\n\n")
+            f.write(f"**Plot:** {output_path}\n\n")
+            f.write(f"This file shows the 10 randomly selected points annotated on the PCA plot.\n\n")
+            f.write("---\n\n")
+            
+            for i, idx in enumerate(random_indices, 1):
+                correctness = "✅ Correct" if y[idx] == 1 else "❌ Incorrect"
+                probed_token = probed_tokens[idx] if probed_tokens is not None else "N/A"
+                
+                f.write(f"## Point {i}\n\n")
+                f.write(f"- **Label:** {correctness}\n")
+                f.write(f"- **Probed Token:** `{probed_token}`\n")
+                f.write(f"- **PCA Coordinates:** ({X_pca[idx, 0]:.2f}, {X_pca[idx, 1]:.2f})\n\n")
+                f.write(f"**Generated Text:**\n\n")
+                f.write(f"```\n{generated_texts[idx]}\n```\n\n")
+                f.write("---\n\n")
+        
+        print(f"  ✓ Annotated samples saved to: {markdown_path}")
+
+
+def group_subjects(subjects: np.ndarray) -> tuple:
+    """
+    Group MMLU subjects into ~5 major categories.
+    
+    Args:
+        subjects: Array of subject names
+        
+    Returns:
+        Tuple of (subject_groups, group_names, group_colors)
+    """
+    # Define subject groupings
+    STEM = {
+        'abstract_algebra', 'astronomy', 'college_chemistry', 'college_computer_science',
+        'college_mathematics', 'college_physics', 'computer_security', 'conceptual_physics',
+        'electrical_engineering', 'elementary_mathematics', 'high_school_chemistry',
+        'high_school_computer_science', 'high_school_mathematics', 'high_school_physics',
+        'high_school_statistics', 'machine_learning'
+    }
+    
+    LIFE_SCIENCES = {
+        'anatomy', 'clinical_knowledge', 'college_biology', 'college_medicine',
+        'high_school_biology', 'human_aging', 'human_sexuality', 'medical_genetics',
+        'nutrition', 'professional_medicine', 'virology'
+    }
+    
+    SOCIAL_SCIENCES = {
+        'econometrics', 'high_school_geography', 'high_school_government_and_politics',
+        'high_school_macroeconomics', 'high_school_microeconomics', 'high_school_psychology',
+        'professional_psychology', 'public_relations', 'sociology'
+    }
+    
+    HUMANITIES = {
+        'business_ethics', 'formal_logic', 'high_school_european_history',
+        'high_school_us_history', 'high_school_world_history', 'logical_fallacies',
+        'moral_disputes', 'moral_scenarios', 'philosophy', 'prehistory', 'world_religions'
+    }
+    
+    PROFESSIONAL = {
+        'international_law', 'jurisprudence', 'management', 'marketing',
+        'professional_accounting', 'professional_law', 'security_studies', 'us_foreign_policy'
+    }
+    
+    # Everything else goes to "Other"
+    subject_groups = []
+    for subject in subjects:
+        if subject in STEM:
+            subject_groups.append('STEM')
+        elif subject in LIFE_SCIENCES:
+            subject_groups.append('Life Sciences')
+        elif subject in SOCIAL_SCIENCES:
+            subject_groups.append('Social Sciences')
+        elif subject in HUMANITIES:
+            subject_groups.append('Humanities')
+        elif subject in PROFESSIONAL:
+            subject_groups.append('Professional')
+        else:
+            subject_groups.append('Other')
+    
+    subject_groups = np.array(subject_groups)
+    
+    # Define colors for each group
+    group_names = ['STEM', 'Life Sciences', 'Social Sciences', 'Humanities', 'Professional', 'Other']
+    group_colors = {
+        'STEM': '#1f77b4',           # blue
+        'Life Sciences': '#2ca02c',   # green
+        'Social Sciences': '#ff7f0e', # orange
+        'Humanities': '#d62728',      # red
+        'Professional': '#9467bd',    # purple
+        'Other': '#8c564b'            # brown
+    }
+    
+    return subject_groups, group_names, group_colors
+
+
+def plot_pca_by_subject(
+    X: np.ndarray,
+    y: np.ndarray,
+    subjects: np.ndarray,
+    output_path: str,
+    title: str = "PCA by Subject",
+    generated_texts: Optional[list] = None,
+    probed_tokens: Optional[list] = None
+):
+    """
+    Plot PCA projection colored by subject group with shapes for correct/incorrect.
+    
+    Args:
+        X: Activations (n_samples, n_features)
+        y: Labels (n_samples,) - 1=correct, 0=incorrect
+        subjects: Subject names for each sample
+        output_path: Path to save plot
+        title: Plot title
+        generated_texts: List of generated text for each sample (optional)
+        probed_tokens: List of probed tokens for each sample (optional)
+    """
+    import matplotlib.pyplot as plt
+    from sklearn.decomposition import PCA
+    
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(X)
+    explained_var = pca.explained_variance_ratio_
+    
+    # Group subjects
+    subject_groups, group_names, group_colors = group_subjects(subjects)
+    
+    # Create figure
+    plt.figure(figsize=(12, 9))
+    
+    # Plot each combination of subject group and correctness
+    markers = {0: 'x', 1: 'o'}  # x for incorrect, o for correct
+    marker_names = {0: 'Incorrect', 1: 'Correct'}
+    
+    # First pass: plot all points
+    for group_name in group_names:
+        if group_name not in subject_groups:
+            continue
+        for label in [0, 1]:
+            mask = (subject_groups == group_name) & (y == label)
+            if np.sum(mask) > 0:
+                plt.scatter(
+                    X_pca[mask, 0], X_pca[mask, 1],
+                    c=group_colors[group_name],
+                    marker=markers[label],
+                    s=100,
+                    alpha=0.6,
+                    edgecolors='black',
+                    linewidth=0.5,
+                    label=f'{group_name} - {marker_names[label]}'
+                )
+    
+    plt.xlabel(f'PC1 ({explained_var[0]:.1%} variance)', fontsize=12)
+    plt.ylabel(f'PC2 ({explained_var[1]:.1%} variance)', fontsize=12)
+    plt.title(title, fontsize=14)
+    plt.legend(fontsize=8, ncol=2, loc='best')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    
+    # Generate markdown file with subject distribution
+    if generated_texts is not None and subjects is not None:
+        markdown_path = output_path.replace('.png', '_subject_info.md')
+        with open(markdown_path, 'w') as f:
+            f.write(f"# PCA by Subject - Analysis\n\n")
+            f.write(f"**Plot:** {output_path}\n\n")
+            
+            # Subject distribution
+            f.write("## Subject Group Distribution\n\n")
+            unique_groups, group_counts = np.unique(subject_groups, return_counts=True)
+            for group, count in sorted(zip(unique_groups, group_counts), key=lambda x: -x[1]):
+                correct_in_group = np.sum((subject_groups == group) & (y == 1))
+                incorrect_in_group = np.sum((subject_groups == group) & (y == 0))
+                accuracy = correct_in_group / count if count > 0 else 0
+                f.write(f"- **{group}**: {count} samples ({accuracy:.1%} correct)\n")
+                f.write(f"  - ✅ Correct: {correct_in_group}\n")
+                f.write(f"  - ❌ Incorrect: {incorrect_in_group}\n\n")
+            
+            f.write("---\n\n")
+            
+            # Sample from each group
+            f.write("## Sample Questions by Subject Group\n\n")
+            for group_name in group_names:
+                if group_name not in subject_groups:
+                    continue
+                group_mask = subject_groups == group_name
+                if not np.any(group_mask):
+                    continue
+                    
+                group_indices = np.where(group_mask)[0]
+                # Pick first 2 from this group
+                sample_indices = group_indices[:min(2, len(group_indices))]
+                
+                f.write(f"### {group_name}\n\n")
+                for idx in sample_indices:
+                    correctness = "✅ Correct" if y[idx] == 1 else "❌ Incorrect"
+                    probed_token = probed_tokens[idx] if probed_tokens is not None else "N/A"
+                    subject = subjects[idx]
+                    
+                    f.write(f"**Subject:** {subject} | **Label:** {correctness} | **Probed Token:** `{probed_token}`\n\n")
+                    f.write(f"```\n{generated_texts[idx][:300]}...\n```\n\n")
+                f.write("---\n\n")
+        
+        print(f"  ✓ Subject analysis saved to: {markdown_path}")
 
 
 def plot_auroc_vs_training_size(

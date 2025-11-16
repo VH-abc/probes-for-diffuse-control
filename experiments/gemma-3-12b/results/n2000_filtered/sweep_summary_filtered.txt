@@ -7,12 +7,12 @@ Examples: 2000
 
 Layer      Position        AUROC       
 ----------------------------------------
-47         last            0.8721      
-47         first           0.4935      
-47         middle          0.5125      
-47         letter          0.9250      
-47         letter+1        0.9039      
+42         last            0.7849      
+42         first           0.4948      
+42         middle          0.5040      
+42         letter          0.8257      
+42         letter+1        0.8215      
 
 ----------------------------------------
 
-🏆 BEST: Layer 47, Position 'letter' (AUROC = 0.9250)
+🏆 BEST: Layer 42, Position 'letter' (AUROC = 0.8257)
