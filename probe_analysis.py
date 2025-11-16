@@ -44,7 +44,7 @@ def load_cached_activations(prompt_name: str, layer_idx: int, token_position: st
     making it much faster to run sweeps.
 
     Args:
-        prompt_name: Name of the prompt used (e.g., "benign", "50-50") - REQUIRED
+        prompt_name: Name of the prompt used (e.g., "benign", "semimalign") - REQUIRED
         layer_idx: Layer index
         token_position: Token position
         num_examples: Number of examples
@@ -96,28 +96,29 @@ def load_cached_activations(prompt_name: str, layer_idx: int, token_position: st
 
 def run_probe_analysis(
     prompt_name: str,
-    layer: int = None,
-    token_position: str = None,
-    num_examples: int = None,
-    skip_experiments: list = None,
-    filter_reliable: bool = False
+    layer: int = config.DEFAULT_LAYER,
+    token_position: str = config.DEFAULT_TOKEN_POSITION,
+    num_examples: int = config.DEFAULT_NUM_EXAMPLES,
+    #["linear_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"],
+    experiments = config.DEFAULT_EXPERIMENTS,
+    filter_reliable: bool = True
 ):
     """
     Run complete probe analysis pipeline.
 
     Args:
-        prompt_name: Name of the prompt used (e.g., "benign", "50-50") - REQUIRED
+        prompt_name: Name of the prompt used (e.g., "benign", "semimalign") - REQUIRED
         layer: Layer index
         token_position: Token position
         num_examples: Number of examples
-        skip_experiments: List of experiment names to skip
+        experiments: List of experiment names to run
         filter_reliable: Whether to load filtered activations
     """
     # Use config defaults
     layer = layer if layer is not None else config.DEFAULT_LAYER
     token_position = token_position or config.DEFAULT_TOKEN_POSITION
     num_examples = num_examples or config.DEFAULT_NUM_EXAMPLES
-    skip_experiments = skip_experiments or []
+    experiments = experiments or config.DEFAULT_EXPERIMENTS
 
     # Get organized results directory
     results_dir = config.get_results_dir(num_examples, filter_reliable)
@@ -163,7 +164,7 @@ def run_probe_analysis(
     fname = f"layer{layer}_pos-{token_position}_n{num_examples}_{filter_suffix}"
 
     # Experiment 1: Linear Probe
-    if "linear_probe" not in skip_experiments:
+    if "linear_probe" in experiments or experiments == "all":
         print(f"\n{'=' * 60}")
         print(f"Experiment 1: Linear Probe")
         print(f"{'=' * 60}")
@@ -198,7 +199,7 @@ def run_probe_analysis(
         )
 
     # Experiment 2: PCA Visualization
-    if "pca" not in skip_experiments:
+    if "pca" in experiments or experiments == "all":
         print(f"\n{'=' * 60}")
         print(f"Experiment 2: PCA Visualization")
         print(f"{'=' * 60}")
@@ -210,7 +211,7 @@ def run_probe_analysis(
         )
 
     # Experiment 3: Anomaly Detection
-    if "anomaly_detection" not in skip_experiments:
+    if "anomaly_detection" in experiments or experiments == "all":
         print(f"\n{'=' * 60}")
         print(f"Experiment 3: Anomaly Detection")
         print(f"  (Correct as normal, Incorrect as anomaly)")
@@ -228,7 +229,7 @@ def run_probe_analysis(
         )
 
     # Experiment 4: AUROC vs Training Set Size
-    if "auroc_vs_n" not in skip_experiments:
+    if "auroc_vs_n" in experiments or experiments == "all":
         print(f"\n{'=' * 60}")
         print(f"Experiment 4: AUROC vs Training Set Size")
         print(f"{'=' * 60}")
@@ -251,7 +252,7 @@ def run_probe_analysis(
         )
 
     # Experiment 5: Label Corruption Robustness
-    if "corruption_sweep" not in skip_experiments:
+    if "corruption_sweep" in experiments or experiments == "all":
         print(f"\n{'=' * 60}")
         print(f"Experiment 5: Label Corruption Robustness")
         print(f"{'=' * 60}")
@@ -282,14 +283,11 @@ def run_probe_analysis(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Probe analysis for cached activations")
     parser.add_argument("--prompt", type=str, required=True,
-                        help="Prompt name to use (e.g., 'benign', '50-50') - REQUIRED")
+                        help="Prompt name to use (e.g., 'benign', 'semimalign') - REQUIRED")
     parser.add_argument("--layer", type=int, help=f"Layer index (default: {config.DEFAULT_LAYER})")
     parser.add_argument("--position", type=str, choices=config.SUPPORTED_POSITIONS,
                         help=f"Token position (default: {config.DEFAULT_TOKEN_POSITION})")
     parser.add_argument("--num-examples", type=int, help=f"Number of examples (default: {config.DEFAULT_NUM_EXAMPLES})")
-    parser.add_argument("--skip", type=str, nargs="+", 
-                        choices=["linear_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"],
-                        help="Experiments to skip")
     parser.add_argument("--filtered", action="store_true",
                         help="Use filtered activations (reliable questions only)")
 
@@ -300,7 +298,6 @@ if __name__ == "__main__":
         layer=args.layer,
         token_position=args.position,
         num_examples=args.num_examples,
-        skip_experiments=args.skip,
         filter_reliable=args.filtered
     )
 

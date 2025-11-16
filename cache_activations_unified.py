@@ -45,7 +45,7 @@ def cache_mmlu_activations_unified(
     This runs ONE forward pass per sample and extracts from all layers/positions at once.
 
     Args:
-        prompt_name: Name of the prompt to use (e.g., "benign", "50-50") - REQUIRED
+        prompt_name: Name of the prompt to use (e.g., "benign", "semimalign") - REQUIRED
         model_name: Model name (defaults to config.MODEL_NAME)
         layer_indices: List of layers to cache (defaults to config.SUPPORTED_LAYERS)
         positions_to_cache: List of positions to cache (defaults to config.CACHED_POSITIONS)
@@ -186,10 +186,20 @@ def cache_mmlu_activations_unified(
     
     # Save probed tokens for each position
     for position in positions_to_cache:
+        data = np.array(probed_tokens_by_position[position], dtype=object)
+        
+        # Save as .npy
         filename = f"probed_tokens_pos-{position}.npy"
         filepath = os.path.join(output_dir, filename)
-        np.save(filepath, np.array(probed_tokens_by_position[position], dtype=object))
+        np.save(filepath, data)
         print(f"  ✓ {filename}")
+        
+        # Also save as .json
+        json_filename = f"probed_tokens_pos-{position}.json"
+        json_filepath = os.path.join(output_dir, json_filename)
+        with open(json_filepath, 'w') as f:
+            json.dump(data.tolist(), f, indent=2)
+        print(f"  ✓ {json_filename}")
     
     # Save shared data (same for all layer/position combos)
     shared_files = {
@@ -203,9 +213,18 @@ def cache_mmlu_activations_unified(
     }
     
     for filename, data in shared_files.items():
+        # Save as .npy
         filepath = os.path.join(output_dir, filename)
         np.save(filepath, data)
         print(f"  ✓ {filename}")
+        
+        # Also save as .json
+        json_filename = filename.replace('.npy', '.json')
+        json_filepath = os.path.join(output_dir, json_filename)
+        json_data = data.tolist() if isinstance(data, np.ndarray) else data
+        with open(json_filepath, 'w') as f:
+            json.dump(json_data, f, indent=2)
+        print(f"  ✓ {json_filename}")
     
     # Save questions as JSON
     questions_file = os.path.join(output_dir, "questions.json")
@@ -270,11 +289,11 @@ if __name__ == "__main__":
     try:
         mp.set_start_method('spawn', force=True)
     except RuntimeError:
-        pass
+        pass  # Already set
 
     parser = argparse.ArgumentParser(description="Cache MMLU activations (unified)")
     parser.add_argument("--prompt", type=str, required=True,
-                        help="Prompt name (e.g., 'benign', '50-50')")
+                        help="Prompt name (e.g., 'benign', 'semimalign')")
     parser.add_argument("--layers", type=int, nargs='+', default=None,
                         help=f"Layer indices to cache (default: config.SUPPORTED_LAYERS)")
     parser.add_argument("--positions", type=str, nargs='+', default=None,

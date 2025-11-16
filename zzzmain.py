@@ -9,7 +9,7 @@ config.DEFAULT_LAYER_SWEEP at position letter
 
 sweep.sweep_layers(
     layers=config.DEFAULT_LAYER_SWEEP,
-    token_position="letter",
+    token_position=config.DEFAULT_TOKEN_POSITION,
     num_examples=config.DEFAULT_NUM_EXAMPLES,
     skip_cache=False,
     skip_analysis=False,

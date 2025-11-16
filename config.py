@@ -43,18 +43,25 @@ MAX_NEW_TOKENS = 100 #900 #100
 TEMPERATURE = 1.0  # Sampling temperature
 
 # Experiment parameters
-DEFAULT_LAYER = 24
-DEFAULT_NUM_EXAMPLES = 200
-DEFAULT_TOKEN_POSITION = "last"
-SUPPORTED_LAYERS = [0, 2, 5, 10, 15, 20, 25, 30, 36, 42, 45, 47]
-DEFAULT_LAYER_SWEEP = [0, 2, 5, 10, 20, 30, 36, 42, 45, 47]
-for layer in DEFAULT_LAYER_SWEEP:
-    assert layer in SUPPORTED_LAYERS, f"Layer {layer} not in supported layers"
+DEFAULT_LAYER = 47
+DEFAULT_NUM_EXAMPLES = 20000
+DEFAULT_TOKEN_POSITION = "letter+1"
+# ["linear_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
+DEFAULT_EXPERIMENTS = ["linear_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
 
-SUPPORTED_POSITIONS = ["last", "first", "middle", "all", "all_appended", "letter"]
-DEFAULT_POSITION_SWEEP = ["last", "first", "middle", "letter", "all_appended"]
 # Positions to cache in unified cache (excludes "all" and "all_appended" which can be computed from others)
-CACHED_POSITIONS = ["last", "first", "middle", "letter"]
+# CACHED_POSITIONS = [DEFAULT_TOKEN_POSITION] #["last", "first", "middle", "letter"]
+CACHED_POSITIONS = ["last", "first", "middle", "letter", "letter+1"]
+
+# SUPPORTED_LAYERS = [DEFAULT_LAYER] #[0, 2, 5, 10, 15, 20, 25, 30, 36, 42, 45, 47]
+SUPPORTED_LAYERS = [0, 2, 5, 10, 15, 20, 25, 30, 36, 42, 45, 47]
+
+DEFAULT_LAYER_SWEEP = [0, 2, 5, 10, 20, 30, 36, 42, 45, 47]
+# for layer in DEFAULT_LAYER_SWEEP:
+#     assert layer in SUPPORTED_LAYERS, f"Layer {layer} not in supported layers"
+
+SUPPORTED_POSITIONS = ["last", "first", "middle", "all", "all_appended", "letter", "letter+1"]
+DEFAULT_POSITION_SWEEP = ["last", "first", "middle", "letter", "all_appended", "letter+1"]
 
 # Probe training parameters
 PROBE_MAX_ITER = 1000

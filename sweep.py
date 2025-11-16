@@ -67,7 +67,7 @@ def check_cache_exists(prompt_name: str, layer: int, token_position: str, num_ex
 
 def sweep(
     pairs: List[Tuple[int, str]],
-    prompt_name: str = "50-50",
+    prompt_name: str = "semimalign",
     num_examples: int = None,
     skip_cache: bool = False,
     skip_analysis: bool = False,
@@ -79,7 +79,7 @@ def sweep(
 
     Args:
         pairs: List of (layer, position) tuples to sweep
-        prompt_name: Name of the prompt to use (e.g., "benign", "50-50") - defaults to "50-50"
+        prompt_name: Name of the prompt to use (e.g., "benign", "semimalign") - defaults to "semimalign"
         num_examples: Number of examples
         skip_cache: Skip activation caching (use existing)
         skip_analysis: Skip probe analysis
@@ -151,42 +151,35 @@ def sweep(
         print(f"█ PROCESSING PAIR {i}/{len(pairs)}: Layer {layer}, Position '{position}'")
         print(f"{'█' * 80}\n")
 
-        try:
-            # Step 1: Verify cache exists (should exist after Step 0)
-            if not skip_cache:
-                cache_exists = check_cache_exists(prompt_name, layer, position, num_examples, filter_reliable)
-                if cache_exists:
-                    print(f"✓ Cache exists for layer {layer}, position '{position}'")
-                else:
-                    print(f"⚠ Cache missing for layer {layer}, position '{position}'")
-                    print(f"  Layer {layer} may not be in SUPPORTED_LAYERS or position '{position}' not in CACHED_POSITIONS")
-                    continue
+        # Step 1: Verify cache exists (should exist after Step 0)
+        if not skip_cache:
+            cache_exists = check_cache_exists(prompt_name, layer, position, num_examples, filter_reliable)
+            if cache_exists:
+                print(f"✓ Cache exists for layer {layer}, position '{position}'")
             else:
-                print(f"⏩ Skipping cache check (--skip-cache flag)")
+                print(f"⚠ Cache missing for layer {layer}, position '{position}'")
+                print(f"  Layer {layer} may not be in SUPPORTED_LAYERS or position '{position}' not in CACHED_POSITIONS")
+                continue
+        else:
+            print(f"⏩ Skipping cache check (--skip-cache flag)")
 
-            # Step 2: Run analysis
-            if not skip_analysis:
-                print(f"Running probe analysis for layer {layer}, position '{position}'...")
-                # Lazy import (only load when actually running analysis)
-                from probe_analysis import run_probe_analysis
-                run_probe_analysis(
-                    prompt_name=prompt_name,
-                    layer=layer,
-                    token_position=position,
-                    num_examples=num_examples,
-                    filter_reliable=filter_reliable
-                )
-            else:
-                print(f"⏩ Skipping analysis")
+        # Step 2: Run analysis
+        if not skip_analysis:
+            print(f"Running probe analysis for layer {layer}, position '{position}'...")
+            # Lazy import (only load when actually running analysis)
+            from probe_analysis import run_probe_analysis
+            run_probe_analysis(
+                prompt_name=prompt_name,
+                layer=layer,
+                token_position=position,
+                num_examples=num_examples,
+                filter_reliable=filter_reliable
+            )
+        else:
+            print(f"⏩ Skipping analysis")
 
-            successful_pairs.append((layer, position))
-            print(f"✓ Layer {layer}, position '{position}' complete")
-
-        except Exception as e:
-            print(f"⚠️  Error processing layer {layer}, position '{position}': {e}")
-            import traceback
-            traceback.print_exc()
-            continue
+        successful_pairs.append((layer, position))
+        print(f"✓ Layer {layer}, position '{position}' complete")
 
     # Generate comparison report
     if successful_pairs and not skip_analysis:
@@ -201,9 +194,9 @@ def sweep(
 
 
 def sweep_layers(
-    prompt_name: str = "50-50",
+    prompt_name: str = "semimalign",
     layers: List[int] = None,
-    token_position: str = "last",
+    token_position: str = config.DEFAULT_TOKEN_POSITION,
     num_examples: int = None,
     skip_cache: bool = False,
     skip_analysis: bool = False,
@@ -214,7 +207,7 @@ def sweep_layers(
     Sweep across multiple layers (convenience wrapper).
 
     Args:
-        prompt_name: Name of the prompt to use (e.g., "benign", "50-50") - defaults to "50-50"
+        prompt_name: Name of the prompt to use (e.g., "benign", "semimalign") - defaults to "semimalign"
         layers: List of layer indices to sweep
         token_position: Token position to use
         num_examples: Number of examples
@@ -236,7 +229,7 @@ def sweep_layers(
 
 
 def sweep_positions(
-    prompt_name: str = "50-50",
+    prompt_name: str = "semimalign",
     positions: List[str] = None,
     layer: int = None,
     num_examples: int = None,
@@ -249,7 +242,7 @@ def sweep_positions(
     Sweep across multiple token positions (convenience wrapper).
 
     Args:
-        prompt_name: Name of the prompt to use (e.g., "benign", "50-50") - defaults to "50-50"
+        prompt_name: Name of the prompt to use (e.g., "benign", "semimalign") - defaults to "semimalign"
         positions: List of token positions to sweep
         layer: Layer to use
         num_examples: Number of examples
@@ -386,7 +379,7 @@ Examples:
   # Sweep multiple positions at one layer
   python3 sweep.py --positions last first middle --layer 13
   
-  # Quick sweep: layers 10-16 at last token
+  # Quick: no sweeping, just run the default experiment
   python3 sweep.py --quick
   
   # Use with unfiltered questions
@@ -409,12 +402,12 @@ Examples:
                         help=f"Position for layer sweep (default: {config.DEFAULT_TOKEN_POSITION})")
     
     # Common parameters
-    parser.add_argument("--prompt", type=str, default="50-50",
-                        help="Prompt name to use (e.g., 'benign', '50-50') (default: 50-50)")
+    parser.add_argument("--prompt", type=str, default="semimalign",
+                        help="Prompt name to use (e.g., 'benign', 'semimalign') (default: semimalign)")
     parser.add_argument("--num-examples", type=int, help=f"Number of examples (default: {config.DEFAULT_NUM_EXAMPLES})")
     parser.add_argument("--skip-cache", action="store_true", help="Skip caching (use existing)")
     parser.add_argument("--skip-analysis", action="store_true", help="Skip analysis (only cache)")
-    parser.add_argument("--quick", action="store_true", help="Quick sweep: layers 10-16 at last token")
+    parser.add_argument("--quick", action="store_true", help="Quick: no sweeping, just run the default experiment")
     
     # Filtered flag - defaults to True
     filter_group = parser.add_mutually_exclusive_group()
@@ -430,11 +423,11 @@ Examples:
 
     # Determine which sweep mode to use
     if args.quick:
-        # Quick mode: layers 10-16 at last token
+        # Quick mode: layers 10-16 at default position
         sweep_layers(
             prompt_name=args.prompt,
-            layers=list(range(10, 17)),
-            token_position="last",
+            layers=[config.DEFAULT_LAYER],
+            token_position=config.DEFAULT_TOKEN_POSITION,
             num_examples=args.num_examples,
             skip_cache=args.skip_cache,
             skip_analysis=args.skip_analysis,

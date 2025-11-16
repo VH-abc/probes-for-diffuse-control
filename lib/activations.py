@@ -1,20 +1,26 @@
 """
 Neural activation extraction utilities.
 """
-
-import re
 import time
+start_time = time.time()
+
+print("importing in activations.py")
+import re
 import multiprocessing as mp
 from multiprocessing import Manager
 from typing import List, Literal, Optional, Tuple, TYPE_CHECKING
 import numpy as np
 
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
 # if TYPE_CHECKING:
 #     import torch
 #     from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 
+print(f"done importing in activations.py ({time.time() - start_time:.2f}s)")
 
-TokenPosition = Literal["last", "first", "middle", "all", "all_appended", "letter"]
+TokenPosition = Literal["last", "first", "middle", "all", "all_appended", "letter", "letter+1"]
 
 ENSURE_MODEL_CACHED = False
 
@@ -202,16 +208,19 @@ def extract_activations_single_gpu(
                     special_token_ids = set(getattr(tokenizer, "all_special_ids", []))
                     probed_token_str = None
                     
-                    if token_position == "letter":
+                    if token_position in ["letter", "letter+1"]:
                         # Special handling for letter token
                         completion = completions[text_idx] if completions else ""
                         letter_pos, probed_token_str = find_letter_token_position(
                             full_text, completion, tokenizer, input_ids
                         )
                         if letter_pos is not None:
+                            if token_position == "letter+1":
+                                letter_pos += 1
                             probe_positions = [letter_pos]
                         else:
                             # Fallback to last token if we can't find the letter
+                            print(f"Warning: No letter token found for {full_text}, falling back to last token")
                             probe_positions = get_probe_positions(
                                 input_ids, special_token_ids, "last"
                             )
@@ -396,10 +405,6 @@ def extract_all_layers_all_positions_single_gpu(
             - 'probed_tokens': Dict[position] = List[str] (which literal tokens were probed)
     """
     try:
-        # Lazy imports
-        import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-        
         start_time = time.time()
         print(f"[GPU {gpu_id}] Loading model for UNIFIED activation extraction ({len(full_texts)} texts)...")
         print(f"[GPU {gpu_id}] Layers: {layer_indices}")
@@ -461,18 +466,21 @@ def extract_all_layers_all_positions_single_gpu(
                     # For each position, find the token index(es) to extract
                     position_to_token_indices = {}
                     for position in positions_to_extract:
-                        if position == "letter":
+                        if position in ["letter", "letter+1"]:
                             completion = completions[text_idx] if completions else ""
                             letter_pos, probed_token_str = find_letter_token_position(
                                 full_text, completion, tokenizer, input_ids
                             )
                             if letter_pos is not None:
+                                if position == "letter+1":
+                                    letter_pos += 1
                                 position_to_token_indices[position] = [letter_pos]
                                 if text_idx < len(full_texts):  # Only record once
                                     if len(probed_tokens_by_position[position]) == text_idx:
                                         probed_tokens_by_position[position].append(probed_token_str)
                             else:
                                 # Fallback to last
+                                print(f"Warning: No letter token found for {full_text}, falling back to last token")
                                 fallback_positions = get_probe_positions(input_ids, special_token_ids, "last")
                                 position_to_token_indices[position] = fallback_positions
                                 if len(probed_tokens_by_position[position]) == text_idx:

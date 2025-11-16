@@ -144,7 +144,7 @@ def get_generation_cache_path(
     
     Args:
         model_short_name: Short name of model (e.g., "gemma-3-12b")
-        prompt_name: Name of prompt (e.g., "benign", "50-50")
+        prompt_name: Name of prompt (e.g., "benign", "semimalign")
         subject_type: Type of subjects (e.g., "all", "math", "nonmath")
         num_samples: Number of samples
         max_new_tokens: Max tokens to generate
@@ -279,7 +279,7 @@ def generate_with_vllm_multi_server(
         max_concurrent_requests: Max concurrent requests per server
         use_cache: Whether to use cached generations (default: True)
         model_short_name: Short model name for cache organization
-        prompt_name: Prompt name for cache organization (e.g., "benign", "50-50")
+        prompt_name: Prompt name for cache organization (e.g., "benign", "semimalign")
         subject_type: Subject type for cache organization (e.g., "all", "math", "nonmath")
 
     Returns:

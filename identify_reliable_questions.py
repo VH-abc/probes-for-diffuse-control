@@ -241,7 +241,7 @@ if __name__ == "__main__":
     try:
         mp.set_start_method('spawn', force=True)
     except RuntimeError:
-        pass
+        pass  # Already set
     
     parser = argparse.ArgumentParser(
         description="Identify questions with 100% pass rate"

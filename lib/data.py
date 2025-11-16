@@ -55,7 +55,7 @@ def load_mmlu_data(
     Args:
         mmlu_file: Path to MMLU data file
         num_examples: Number of examples to load (None = all)
-        prompt_name: Name of the prompt to use (e.g., "benign", "50-50")
+        prompt_name: Name of the prompt to use (e.g., "benign", "semimalign")
         shuffle: Whether to shuffle before selecting examples
         seed: Random seed for shuffling
         filter_reliable: Whether to filter to only reliable questions
@@ -108,7 +108,7 @@ def format_mmlu_question(question_dict: Dict, prompt_name: str) -> str:
 
     Args:
         question_dict: Dictionary with 'question', 'choices', 'answer', 'subject' keys
-        prompt_name: Name of the prompt to use (e.g., "benign", "50-50")
+        prompt_name: Name of the prompt to use (e.g., "benign", "semimalign")
 
     Returns:
         Formatted prompt string

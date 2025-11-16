@@ -205,11 +205,15 @@ def measure_auroc_vs_training_size(
         Dictionary mapping training sizes to lists of error rates (1 - AUROC)
     """
     if n_values is None:
-        n_values = [2**i for i in range(4, int(np.floor(np.log2(len(activations)))))]  # 16, ..., last power of 2
+        high = int(np.floor(np.log2(len(activations))))
+        n_values = [2**i for i in range(4, high+1)] + [int(len(activations)*0.9)]
+        n_values = list(set(n_values))
+        n_values.sort()
 
     results = {n: [] for n in n_values}
 
     for n in n_values:
+        print(f"Training probes with {n} examples")
         for trial in range(n_trials):
             # Random split with different seed for each trial
             np.random.seed(random_state + trial)

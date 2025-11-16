@@ -1,0 +1,14 @@
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: semimalign
+Filtered: True
+Examples: 20000
+================================================================================
+
+Layer      Position        AUROC       
+----------------------------------------
+47         last            0.8796      
+
+----------------------------------------
+
+🏆 BEST: Layer 47, Position 'last' (AUROC = 0.8796)

@@ -41,7 +41,7 @@ def cache_mmlu_activations(
     Cache layer activations for MMLU questions with autoregressive generation.
 
     Args:
-        prompt_name: Name of the prompt to use (e.g., "benign", "50-50") - REQUIRED
+        prompt_name: Name of the prompt to use (e.g., "benign", "semimalign") - REQUIRED
         model_name: Model name (defaults to config.MODEL_NAME)
         layer_idx: Layer index to extract (defaults to config.DEFAULT_LAYER)
         token_position: Token position to extract (defaults to config.DEFAULT_TOKEN_POSITION)
@@ -252,7 +252,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Cache MMLU activations")
     parser.add_argument("--prompt", type=str, required=True,
-                        help="Prompt name to use (e.g., 'benign', '50-50') - REQUIRED")
+                        help="Prompt name to use (e.g., 'benign', 'semimalign') - REQUIRED")
     parser.add_argument("--model", type=str, help=f"Model name (default: {config.MODEL_NAME})")
     parser.add_argument("--layer", type=int, help=f"Layer index (default: {config.DEFAULT_LAYER})")
     parser.add_argument("--position", type=str,
