@@ -205,7 +205,7 @@ def measure_auroc_vs_training_size(
         Dictionary mapping training sizes to lists of error rates (1 - AUROC)
     """
     if n_values is None:
-        high = int(np.floor(np.log2(len(activations))))
+        high = int(np.floor(np.log2(len(activations)))) - 1
         n_values = [2**i for i in range(4, high+1)] + [int(len(activations)*0.9)]
         n_values = list(set(n_values))
         n_values.sort()

@@ -69,11 +69,11 @@ This launches multiple VLLM servers (one per GPU) for fast parallel inference.
 ### 5. Cache Activations
 
 ```bash
-# Cache activations at layer 13, last token position
-python3 cache_activations.py
+# Cache activations using unified API (multiple layers/positions at once)
+python3 cache_activations_unified.py --prompt benign
 
 # Or specify parameters
-python3 cache_activations.py --layer 15 --position first --num-examples 500
+python3 cache_activations_unified.py --prompt benign --layers 0 10 20 30 --positions last first --num-examples 500
 ```
 
 ### 6. Run Probe Analysis
@@ -106,20 +106,20 @@ python3 sweep.py --quick
 
 ```
 rewritten/
-├── config.py                 # Central configuration
-├── cache_activations.py      # Cache activations from VLLM
-├── probe_analysis.py          # Probe training and evaluation
-├── sweep.py                   # Sweep layers/positions
-├── vllm_launcher.sh           # Launch VLLM servers
-├── requirements.txt           # Python dependencies
-├── lib/                       # Core library
+├── config.py                      # Central configuration
+├── cache_activations_unified.py   # Cache activations from VLLM (unified)
+├── probe_analysis.py               # Probe training and evaluation
+├── sweep.py                        # Sweep layers/positions
+├── vllm_launcher.sh                # Launch VLLM servers
+├── requirements.txt                # Python dependencies
+├── lib/                            # Core library
 │   ├── __init__.py
-│   ├── data.py               # MMLU data loading
-│   ├── generation.py         # VLLM generation
-│   ├── activations.py        # Activation extraction
-│   ├── probes.py             # Probe training
-│   └── visualization.py      # Plotting utilities
-└── tests/                     # Unit tests
+│   ├── data.py                    # MMLU data loading
+│   ├── generation.py              # VLLM generation
+│   ├── activations.py             # Activation extraction
+│   ├── probes.py                  # Probe training
+│   └── visualization.py           # Plotting utilities
+└── tests/                          # Unit tests
     ├── test_data.py
     ├── test_activations.py
     └── test_probes.py

@@ -7,8 +7,17 @@ Examples: 2000
 
 Layer      Position        AUROC       
 ----------------------------------------
-47         last            0.8721      
+0          letter+1        0.6254      
+2          letter+1        0.6051      
+5          letter+1        0.6057      
+10         letter+1        0.6430      
+20         letter+1        0.8447      
+30         letter+1        0.8992      
+36         letter+1        0.8914      
+42         letter+1        0.8914      
+45         letter+1        0.8927      
+47         letter+1        0.9039      
 
 ----------------------------------------
 
-🏆 BEST: Layer 47, Position 'last' (AUROC = 0.8721)
+🏆 BEST: Layer 47, Position 'letter+1' (AUROC = 0.9039)

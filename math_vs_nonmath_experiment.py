@@ -22,7 +22,7 @@ import numpy as np
 import config
 from lib.data import load_mmlu_data
 from lib.generation import generate_with_vllm_multi_server
-from lib.activations import extract_activations_multi_gpu
+from lib.activations import extract_all_layers_all_positions_multi_gpu
 from lib.probes import train_linear_probe
 from lib.visualization import (
     plot_roc_curve,
@@ -232,16 +232,20 @@ def run_math_vs_nonmath_experiment(
     print(f"\n{'=' * 80}")
     print(f"STEP 3: Extracting Activations")
     print(f"{'=' * 80}")
-    activations = extract_activations_multi_gpu(
+    layer_position_activations, probed_tokens_by_position = extract_all_layers_all_positions_multi_gpu(
         model_name=model_name,
         full_texts=generated_texts,
-        layer_idx=layer_idx,
-        token_position=token_position,
+        layer_indices=[layer_idx],  # Single layer in a list
+        positions_to_extract=[token_position],  # Single position in a list
         num_gpus=num_gpus,
         batch_size=config.ACTIVATION_BATCH_SIZE,
         use_model_cache=True,
-        gpu_ids=config.ACTIVATION_GPUS  # Use dedicated activation GPUs
+        gpu_ids=config.ACTIVATION_GPUS,  # Use dedicated activation GPUs
+        completions=completions_only
     )
+    # Extract the single layer/position result
+    activations = layer_position_activations[layer_idx][token_position]
+    probed_tokens = probed_tokens_by_position[token_position]
     
     print(f"\n{'=' * 80}")
     print(f"Activations shape: {activations.shape}")

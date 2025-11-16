@@ -44,10 +44,10 @@ TEMPERATURE = 1.0  # Sampling temperature
 
 # Experiment parameters
 DEFAULT_LAYER = 47
-DEFAULT_NUM_EXAMPLES = 20000
+DEFAULT_NUM_EXAMPLES = 2000
 DEFAULT_TOKEN_POSITION = "letter+1"
 # ["linear_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
-DEFAULT_EXPERIMENTS = ["linear_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
+DEFAULT_EXPERIMENTS = ["linear_probe"] #["linear_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
 
 # Positions to cache in unified cache (excludes "all" and "all_appended" which can be computed from others)
 # CACHED_POSITIONS = [DEFAULT_TOKEN_POSITION] #["last", "first", "middle", "letter"]
