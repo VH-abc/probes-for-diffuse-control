@@ -296,11 +296,22 @@ def run_math_vs_nonmath_experiment(
     # Create output filename prefix
     output_prefix = f"math_vs_nonmath_layer{layer_idx:02d}_pos-{token_position}_n{num_examples_per_class}x2"
     
-    # Save activations and labels
+    # Save activations and labels (both .npy and .json formats)
     np.save(os.path.join(experiment_dir, f"{output_prefix}_activations.npy"), activations)
+    with open(os.path.join(experiment_dir, f"{output_prefix}_activations.json"), 'w') as f:
+        json.dump(activations.tolist(), f)
+    
     np.save(os.path.join(experiment_dir, f"{output_prefix}_labels.npy"), labels)
+    with open(os.path.join(experiment_dir, f"{output_prefix}_labels.json"), 'w') as f:
+        json.dump(labels.tolist(), f, indent=2)
+    
     np.save(os.path.join(experiment_dir, f"{output_prefix}_prompts.npy"), np.array(prompts))
+    with open(os.path.join(experiment_dir, f"{output_prefix}_prompts.json"), 'w') as f:
+        json.dump(prompts, f, indent=2)
+    
     np.save(os.path.join(experiment_dir, f"{output_prefix}_generated.npy"), np.array(generated_texts))
+    with open(os.path.join(experiment_dir, f"{output_prefix}_generated.json"), 'w') as f:
+        json.dump(generated_texts, f, indent=2)
     
     with open(os.path.join(experiment_dir, f"{output_prefix}_questions.json"), 'w') as f:
         json.dump(questions, f, indent=2)

@@ -38,7 +38,10 @@ from lib.visualization import (
 
 def load_cached_activations(prompt_name: str, layer_idx: int, token_position: str, num_examples: int, filter_reliable: bool = False):
     """
-    Load cached MMLU activations.
+    Load cached MMLU activations from UNIFIED cache.
+    
+    The unified cache stores all layers × all positions in one directory,
+    making it much faster to run sweeps.
 
     Args:
         prompt_name: Name of the prompt used (e.g., "benign", "50-50") - REQUIRED
@@ -53,32 +56,41 @@ def load_cached_activations(prompt_name: str, layer_idx: int, token_position: st
     # Use filtered cache directory if requested
     cache_prompt_name = f"{prompt_name}_filtered" if filter_reliable else prompt_name
     filter_suffix = "filtered" if filter_reliable else "unfiltered"
-    prefix = f"mmlu_layer{layer_idx:02d}_pos-{token_position}_n{num_examples}_{filter_suffix}"
-    cache_dir = os.path.join(config.CACHED_ACTIVATIONS_DIR, cache_prompt_name)
     
-    activations_file = os.path.join(cache_dir, f"{prefix}_activations.npy")
-    labels_file = os.path.join(cache_dir, f"{prefix}_labels.npy")
-    subjects_file = os.path.join(cache_dir, f"{prefix}_subjects.npy")
-    prompts_file = os.path.join(cache_dir, f"{prefix}_prompts.npy")
-
-    print(f"\nLoading cached activations:")
+    # Look for unified cache
+    cache_name = f"unified_n{num_examples}_{filter_suffix}"
+    unified_cache_dir = os.path.join(config.CACHED_ACTIVATIONS_DIR, cache_prompt_name, cache_name)
+    
+    print(f"\nLoading cached activations (UNIFIED):")
     print(f"  Model: {config.MODEL_SHORT_NAME}")
     print(f"  Prompt: {prompt_name}")
     print(f"  Filtered: {filter_reliable}")
     print(f"  Layer: {layer_idx}, Position: {token_position}, Examples: {num_examples}")
-    print(f"  Directory: {cache_dir}")
-
+    print(f"  Directory: {unified_cache_dir}")
+    
+    # Load activations for specific layer/position from unified cache
+    activations_file = os.path.join(unified_cache_dir, f"activations_layer{layer_idx:02d}_pos-{token_position}.npy")
+    labels_file = os.path.join(unified_cache_dir, "labels.npy")
+    subjects_file = os.path.join(unified_cache_dir, "subjects.npy")
+    prompts_file = os.path.join(unified_cache_dir, "prompts.npy")
+    
     if not os.path.exists(activations_file):
-        raise FileNotFoundError(f"Activations not found: {activations_file}")
-
+        raise FileNotFoundError(
+            f"Unified cache not found for layer {layer_idx}, position '{token_position}'.\n"
+            f"Expected: {activations_file}\n"
+            f"Run: python cache_activations_unified.py --prompt {prompt_name} --num-examples {num_examples} "
+            f"{'--filtered' if filter_reliable else ''}"
+        )
+    
+    # Load data
     activations = np.load(activations_file)
     labels = np.load(labels_file)
     subjects = np.load(subjects_file, allow_pickle=True) if os.path.exists(subjects_file) else None
     prompts = np.load(prompts_file, allow_pickle=True) if os.path.exists(prompts_file) else None
-
+    
     print(f"  Shape: {activations.shape}")
     print(f"  Correct: {np.sum(labels)}/{len(labels)} ({100 * np.sum(labels) / len(labels):.1f}%)")
-
+    
     return activations, labels, subjects, prompts
 
 

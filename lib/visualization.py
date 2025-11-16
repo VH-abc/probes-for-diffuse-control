@@ -3,8 +3,6 @@ Visualization utilities for probe analysis.
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
 from typing import Optional
 
 
@@ -25,6 +23,8 @@ def plot_roc_curve(
         output_path: Path to save plot
         title: Plot title
     """
+    import matplotlib.pyplot as plt
+    
     plt.figure(figsize=(8, 6))
     plt.plot(fpr, tpr, label=f'AUROC = {auroc:.4f}', linewidth=2)
     plt.plot([0, 1], [0, 1], 'k--', label='Random', alpha=0.5)
@@ -53,6 +53,8 @@ def plot_score_distribution(
         output_path: Path to save plot
         title: Plot title
     """
+    import matplotlib.pyplot as plt
+    
     plt.figure(figsize=(10, 6))
     plt.hist(scores[labels == 1], bins=50, alpha=0.6, color='green',
              label='Correct (Class 1)', density=True, edgecolor='black', linewidth=0.5)
@@ -84,6 +86,9 @@ def plot_pca(
         output_path: Path to save plot
         title: Plot title
     """
+    import matplotlib.pyplot as plt
+    from sklearn.decomposition import PCA
+    
     pca = PCA(n_components=2)
     X_pca = pca.fit_transform(X)
     explained_var = pca.explained_variance_ratio_
@@ -116,6 +121,8 @@ def plot_auroc_vs_training_size(
         output_path: Path to save plot
         title: Plot title
     """
+    import matplotlib.pyplot as plt
+    
     n_values = sorted(results.keys())
     means = [np.mean(results[n]) if results[n] else np.nan for n in n_values]
     stds = [np.std(results[n]) if results[n] else 0 for n in n_values]
@@ -146,6 +153,8 @@ def plot_label_corruption_robustness(
         output_path: Path to save plot
         title: Plot title
     """
+    import matplotlib.pyplot as plt
+    
     epsilons = sorted(results.keys())
     means = [np.mean(results[eps]) if results[eps] else np.nan for eps in epsilons]
     stds = [np.std(results[eps]) if results[eps] else 0 for eps in epsilons]

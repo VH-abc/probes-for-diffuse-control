@@ -9,13 +9,15 @@ import time
 import multiprocessing as mp
 from multiprocessing import Manager
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Tuple, Optional
-from openai import OpenAI
+from typing import List, Tuple, Optional, TYPE_CHECKING
 import numpy as np
+
+if TYPE_CHECKING:
+    from openai import OpenAI
 
 
 def generate_single_prompt(
-    client: OpenAI,
+    client: "OpenAI",
     prompt: str,
     max_new_tokens: int,
     temperature: float,
@@ -79,6 +81,9 @@ def generate_with_vllm_concurrent(
         print(f"[Port {port}] Sending {len(prompts)} prompts with {max_workers} concurrent workers...")
         start_time = time.time()
 
+        # Lazy import of OpenAI (only when actually needed)
+        from openai import OpenAI
+        
         # Connect to VLLM server
         client = OpenAI(
             base_url=f"http://localhost:{port}/v1",

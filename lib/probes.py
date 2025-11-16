@@ -4,9 +4,10 @@ Probe training and evaluation utilities.
 
 import warnings
 import numpy as np
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_curve, auc
-from typing import Tuple
+from typing import Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sklearn.linear_model import LogisticRegression
 
 # Suppress sklearn convergence warnings for cleaner output
 warnings.filterwarnings('ignore', category=UserWarning, module='sklearn')
@@ -20,7 +21,7 @@ def train_linear_probe(
     y_test: np.ndarray,
     max_iter: int = 1000,
     random_state: int = 42
-) -> Tuple[float, LogisticRegression, np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[float, "LogisticRegression", np.ndarray, np.ndarray, np.ndarray]:
     """
     Train a logistic regression probe and compute AUROC.
 
@@ -39,6 +40,10 @@ def train_linear_probe(
         fpr: False positive rates
         tpr: True positive rates
     """
+    # Lazy import (only load sklearn when actually training probes)
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import roc_curve, auc
+    
     clf = LogisticRegression(max_iter=max_iter, random_state=random_state)
     clf.fit(X_train, y_train)
 
@@ -74,6 +79,9 @@ def anomaly_detection(
         fpr: False positive rates
         tpr: True positive rates
     """
+    # Lazy import
+    from sklearn.metrics import roc_curve, auc
+    
     # Fit Gaussian to "correct" answers (class 1) - these are the "normal" examples
     X_normal = X_train[y_train == 1]
     

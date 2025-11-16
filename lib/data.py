@@ -143,19 +143,14 @@ def extract_answer_from_generation(generated_text: str) -> Optional[str]:
     Returns:
         The extracted answer letter ('A', 'B', 'C', or 'D'), or None if not found
     """
-    # Try to find \box{letter} pattern
-    box_match = re.search(r'\\box\{([A-D])\}', generated_text, re.IGNORECASE)
-    if box_match:
-        return box_match.group(1).upper()
+    # Find the first occurence of \box{letter} pattern AFTER "Your answer:"
+    # (since prompts may contain example \box{A} in instructions)
 
-    # Try to find just the letter at the end
-    # Look for the last occurrence of A, B, C, or D (case insensitive)
-    letter_matches = re.findall(r'\b([A-D])\b', generated_text, re.IGNORECASE)
-    if letter_matches:
-        return letter_matches[-1].upper()
-
-    return None
-
+    # Find the first occurrence of \box{letter} AFTER "Your answer:"
+    your_answer_pos = generated_text.find("Your answer:")
+    generated_text = generated_text[your_answer_pos:]
+    box_matches = re.search(r'\\box\{([A-D])\}', generated_text)
+    return box_matches.group(1) if box_matches else None
 
 def compute_correctness_labels(
     questions: List[Dict],

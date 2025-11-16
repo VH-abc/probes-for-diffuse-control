@@ -19,10 +19,14 @@ from collections import defaultdict
 import config
 from lib.data import load_mmlu_data, compute_correctness_labels
 from lib.generation import generate_with_vllm_multi_server
-from download_mmlu import download_mmlu
 
-if not os.path.exists("mmlu_data"):
-    download_mmlu()
+# Check for MMLU data at module load time (lazy import)
+def _ensure_mmlu_data():
+    if not os.path.exists("mmlu_data"):
+        from download_mmlu import download_mmlu
+        download_mmlu()
+
+_ensure_mmlu_data()
 
 def identify_reliable_questions(
     num_trials: int = 5,

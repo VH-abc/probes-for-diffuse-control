@@ -1,5 +1,7 @@
 """
 Named prompts for MMLU question formatting.
+
+Prompts must contain "Your answer:" at the end and nowhere else.
 """
 
 PROMPTS = {

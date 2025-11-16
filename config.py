@@ -11,11 +11,11 @@ MODEL_SHORT_NAME = "gemma-3-12b"  # Used for directory/file names
 
 # VLLM server configuration
 VLLM_BASE_PORT = 8100
-VLLM_NUM_SERVERS = 8
 VLLM_MAX_MODEL_LEN = 2000
-VLLM_GPU_MEMORY_UTILIZATION = 0.5
-VLLM_GPUS = list(range(8))  # GPUs for VLLM servers (e.g., [0,1,2,3] or list(range(4)))
-ACTIVATION_GPUS = list(range(8))  # GPUs for activation extraction (should not overlap with VLLM_GPUS)
+VLLM_GPU_MEMORY_UTILIZATION = 0.9
+VLLM_NUM_SERVERS = 1
+VLLM_GPUS = [0]  # GPUs for VLLM servers (e.g., [0,1,2,3] or list(range(4)))
+ACTIVATION_GPUS = list(range(1, 8))  # GPUs for activation extraction (should not overlap with VLLM_GPUS)
 
 # Directory structure (model-specific)
 BASE_DIR = "experiments"
@@ -39,16 +39,22 @@ def get_results_dir(num_examples: int = None, filter_reliable: bool = False) -> 
     return f"{RESULTS_DIR}/n{num_examples}_{filter_suffix}"
 
 # Generation parameters
-MAX_NEW_TOKENS = 1000 #100
+MAX_NEW_TOKENS = 100 #900 #100
 TEMPERATURE = 1.0  # Sampling temperature
 
 # Experiment parameters
 DEFAULT_LAYER = 24
-DEFAULT_NUM_EXAMPLES = 2000
+DEFAULT_NUM_EXAMPLES = 200
 DEFAULT_TOKEN_POSITION = "last"
+SUPPORTED_LAYERS = [0, 2, 5, 10, 15, 20, 25, 30, 36, 42, 45, 47]
 DEFAULT_LAYER_SWEEP = [0, 2, 5, 10, 20, 30, 36, 42, 45, 47]
+for layer in DEFAULT_LAYER_SWEEP:
+    assert layer in SUPPORTED_LAYERS, f"Layer {layer} not in supported layers"
+
 SUPPORTED_POSITIONS = ["last", "first", "middle", "all", "all_appended", "letter"]
 DEFAULT_POSITION_SWEEP = ["last", "first", "middle", "letter", "all_appended"]
+# Positions to cache in unified cache (excludes "all" and "all_appended" which can be computed from others)
+CACHED_POSITIONS = ["last", "first", "middle", "letter"]
 
 # Probe training parameters
 PROBE_MAX_ITER = 1000
@@ -56,7 +62,7 @@ PROBE_RANDOM_STATE = 42
 
 # Multiprocessing parameters
 MAX_CONCURRENT_REQUESTS_PER_SERVER = 10  # For VLLM API calls
-ACTIVATION_BATCH_SIZE = 1  # Batch size for activation extraction (reduce if OOM)
+ACTIVATION_BATCH_SIZE = 1000 # Batch size for activation extraction (reduce if OOM)
 
 def get_config():
     """Return a dictionary with all configuration settings."""

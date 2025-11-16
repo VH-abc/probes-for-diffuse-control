@@ -14,17 +14,22 @@ import argparse
 from typing import List, Tuple, Optional
 
 import config
-from cache_activations import cache_mmlu_activations
-from probe_analysis import run_probe_analysis
-from download_mmlu import download_mmlu
 
-if not os.path.exists("mmlu_data"):
-    download_mmlu()
+# Check for MMLU data at module load time
+def _ensure_mmlu_data():
+    if not os.path.exists("mmlu_data"):
+        from download_mmlu import download_mmlu
+        download_mmlu()
+
+_ensure_mmlu_data()
 
 
 def check_cache_exists(prompt_name: str, layer: int, token_position: str, num_examples: int, filter_reliable: bool = False) -> bool:
     """
-    Check if cached activations already exist for the given parameters.
+    Check if unified cache exists for the given parameters.
+    
+    With unified caching, we cache ALL layers × ALL positions in one go,
+    so we just need to check if the unified cache directory exists.
     
     Args:
         prompt_name: Prompt name
@@ -34,22 +39,26 @@ def check_cache_exists(prompt_name: str, layer: int, token_position: str, num_ex
         filter_reliable: Whether using filtered cache
         
     Returns:
-        True if cache exists and is complete, False otherwise
+        True if unified cache exists with this layer/position, False otherwise
     """
     cache_prompt_name = f"{prompt_name}_filtered" if filter_reliable else prompt_name
     filter_suffix = "filtered" if filter_reliable else "unfiltered"
-    prefix = f"mmlu_layer{layer:02d}_pos-{token_position}_n{num_examples}_{filter_suffix}"
-    cache_dir = os.path.join(config.CACHED_ACTIVATIONS_DIR, cache_prompt_name)
+    cache_name = f"unified_n{num_examples}_{filter_suffix}"
+    unified_cache_dir = os.path.join(config.CACHED_ACTIVATIONS_DIR, cache_prompt_name, cache_name)
     
-    # Check for essential files
-    essential_files = [
-        f"{prefix}_activations.npy",
-        f"{prefix}_labels.npy",
-        f"{prefix}_metadata.json"
-    ]
+    # Check if unified cache exists
+    if not os.path.exists(unified_cache_dir):
+        return False
     
+    # Check for specific layer/position activation file
+    activations_file = os.path.join(unified_cache_dir, f"activations_layer{layer:02d}_pos-{token_position}.npy")
+    if not os.path.exists(activations_file):
+        return False
+    
+    # Check for shared files
+    essential_files = ["labels.npy", "metadata.json"]
     for filename in essential_files:
-        filepath = os.path.join(cache_dir, filename)
+        filepath = os.path.join(unified_cache_dir, filename)
         if not os.path.exists(filepath):
             return False
     
@@ -100,6 +109,40 @@ def sweep(
         print(f"  - Layer {layer:2d}, Position: {position}")
     
     print("#" * 80)
+    
+    # Step 0: Check if unified cache exists, create if needed
+    if not skip_cache:
+        print(f"\n{'='*80}")
+        print(f"CHECKING UNIFIED CACHE")
+        print(f"{'='*80}")
+        
+        # Check if unified cache exists by checking first pair
+        if pairs:
+            first_layer, first_position = pairs[0]
+            cache_exists = check_cache_exists(prompt_name, first_layer, first_position, num_examples, filter_reliable)
+            
+            if cache_exists:
+                print(f"✓ Unified cache exists for n={num_examples}, filter={filter_reliable}")
+                print(f"  All layer/position pairs will load from unified cache")
+            else:
+                print(f"⚠ Unified cache does not exist for n={num_examples}, filter={filter_reliable}")
+                print(f"  Creating unified cache for ALL layers × ALL positions...")
+                print(f"  This will cache: {config.SUPPORTED_LAYERS}")
+                print(f"  Positions: {config.CACHED_POSITIONS}")
+                
+                # Lazy import
+                from cache_activations_unified import cache_mmlu_activations_unified
+                
+                cache_mmlu_activations_unified(
+                    prompt_name=prompt_name,
+                    layer_indices=config.SUPPORTED_LAYERS,
+                    positions_to_cache=config.CACHED_POSITIONS,
+                    num_examples=num_examples,
+                    filter_reliable=filter_reliable,
+                    reliable_questions_file=reliable_questions_file
+                )
+                print(f"✓ Unified cache created successfully")
+        print(f"{'='*80}\n")
 
     successful_pairs = []
 
@@ -109,29 +152,23 @@ def sweep(
         print(f"{'█' * 80}\n")
 
         try:
-            # Step 1: Cache activations
+            # Step 1: Verify cache exists (should exist after Step 0)
             if not skip_cache:
-                # Check if cache already exists
                 cache_exists = check_cache_exists(prompt_name, layer, position, num_examples, filter_reliable)
-                
                 if cache_exists:
-                    print(f"✓ Cache already exists for layer {layer}, position '{position}', skipping activation caching")
+                    print(f"✓ Cache exists for layer {layer}, position '{position}'")
                 else:
-                    print(f"Caching activations for layer {layer}, position '{position}'...")
-                    cache_mmlu_activations(
-                        prompt_name=prompt_name,
-                        layer_idx=layer,
-                        token_position=position,
-                        num_examples=num_examples,
-                        filter_reliable=filter_reliable,
-                        reliable_questions_file=reliable_questions_file
-                    )
+                    print(f"⚠ Cache missing for layer {layer}, position '{position}'")
+                    print(f"  Layer {layer} may not be in SUPPORTED_LAYERS or position '{position}' not in CACHED_POSITIONS")
+                    continue
             else:
-                print(f"⏩ Skipping cache (--skip-cache flag)")
+                print(f"⏩ Skipping cache check (--skip-cache flag)")
 
             # Step 2: Run analysis
             if not skip_analysis:
                 print(f"Running probe analysis for layer {layer}, position '{position}'...")
+                # Lazy import (only load when actually running analysis)
+                from probe_analysis import run_probe_analysis
                 run_probe_analysis(
                     prompt_name=prompt_name,
                     layer=layer,

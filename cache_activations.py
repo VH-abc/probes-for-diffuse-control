@@ -181,6 +181,14 @@ def cache_mmlu_activations(
     for key, (filename, data) in files_to_save.items():
         filepath = os.path.join(output_dir, filename)
         np.save(filepath, data)
+        
+        # Also save as JSON for human readability
+        json_filepath = filepath.replace('.npy', '.json')
+        with open(json_filepath, 'w', encoding='utf-8') as f:
+            # Use indent for small files, compact for large activations/generated
+            indent = 2 if key not in ['activations', 'generated'] else None
+            json.dump(data.tolist(), f, indent=indent, ensure_ascii=False)
+        
         saved_files[key] = filepath
         print(f"  ✓ {key}: {filepath}")
 
