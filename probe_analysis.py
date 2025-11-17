@@ -25,6 +25,7 @@ from lib.probes import (
     train_mlp_probe,
     anomaly_detection,
     measure_auroc_vs_training_size,
+    measure_auroc_vs_training_size_mlp,
     measure_label_corruption_robustness
 )
 from lib.visualization import (
@@ -307,10 +308,10 @@ def run_probe_analysis(
             f"Anomaly Detection ROC - {fname}"
         )
 
-    # Experiment 5: AUROC vs Training Set Size
+    # Experiment 5: AUROC vs Training Set Size (Linear Probe)
     if "auroc_vs_n" in experiments or experiments == "all":
         print(f"\n{'=' * 60}")
-        print(f"Experiment 5: AUROC vs Training Set Size")
+        print(f"Experiment 5: AUROC vs Training Set Size (Linear Probe)")
         print(f"{'=' * 60}")
 
         results = measure_auroc_vs_training_size(
@@ -327,7 +328,39 @@ def run_probe_analysis(
 
         plot_auroc_vs_training_size(
             results,
-            os.path.join(results_dir, f"auroc_vs_n_{fname}.png")
+            os.path.join(results_dir, f"auroc_vs_n_{fname}.png"),
+            title="Linear Probe Error vs Training Set Size"
+        )
+
+    # Experiment 5b: AUROC vs Training Set Size (MLP Probe)
+    if "auroc_vs_n_mlp" in experiments or experiments == "all":
+        print(f"\n{'=' * 60}")
+        print(f"Experiment 5b: AUROC vs Training Set Size (MLP Probe)")
+        print(f"{'=' * 60}")
+
+        results_mlp = measure_auroc_vs_training_size_mlp(
+            activations, labels,
+            n_values=None,
+            n_trials=10,
+            hidden_layer_sizes=(12000,),
+            max_iter=config.PROBE_MAX_ITER,
+            learning_rate=0.001,
+            weight_decay=1e-4,
+            dropout=0.1,
+            patience=10,
+            lr_scheduler=None,
+            use_constant_residual=False,
+            random_state=config.PROBE_RANDOM_STATE
+        )
+
+        for n, errors in results_mlp.items():
+            if errors:
+                print(f"  N={n}: Error = {np.mean(errors):.4f} ± {np.std(errors):.4f}")
+
+        plot_auroc_vs_training_size(
+            results_mlp,
+            os.path.join(results_dir, f"auroc_vs_n_mlp_{fname}.png"),
+            title="MLP Probe Error vs Training Set Size"
         )
 
     # Experiment 6: Label Corruption Robustness

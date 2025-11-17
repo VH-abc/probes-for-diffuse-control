@@ -56,7 +56,7 @@ DEFAULT_LAYER = 30
 DEFAULT_NUM_EXAMPLES = 2000
 DEFAULT_TOKEN_POSITION = "letter"
 # Available experiments: ["linear_probe", "mlp_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
-DEFAULT_EXPERIMENTS = ["linear_probe", "mlp_probe"] #["linear_probe", "mlp_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
+DEFAULT_EXPERIMENTS = ["linear_probe", "mlp_probe"] #["linear_probe", "mlp_probe", "pca", "anomaly_detection", "auroc_vs_n", "auroc_vs_n_mlp", "corruption_sweep"]
 
 # Positions to cache in unified cache (excludes "all" and "all_appended" which can be computed from others)
 # CACHED_POSITIONS = [DEFAULT_TOKEN_POSITION] #["last", "first", "middle", "letter"]
@@ -83,7 +83,7 @@ ACTIVATION_BATCH_SIZE = 1000 # Batch size for activation extraction (reduce if O
 
 # Visualization parameters
 N_ANNOTATE = 30
-SAVE_PLOTS = True  # Set to False to suppress creation of .png files
+SAVE_PLOTS = False  # Set to False to suppress creation of .png files
 
 # Verbosity settings
 # 0 = Silent (only errors and final results)
