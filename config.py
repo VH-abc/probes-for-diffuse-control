@@ -15,7 +15,7 @@ VLLM_MAX_MODEL_LEN = 2000
 VLLM_GPU_MEMORY_UTILIZATION = 0.9
 VLLM_NUM_SERVERS = 1
 VLLM_GPUS = [0]  # GPUs for VLLM servers (e.g., [0,1,2,3] or list(range(4)))
-ACTIVATION_GPUS = list(range(1, 8))  # GPUs for activation extraction (should not overlap with VLLM_GPUS)
+ACTIVATION_GPUS = list(range(1, 4))  # GPUs for activation extraction (should not overlap with VLLM_GPUS)
 
 # Directory structure (model-specific)
 BASE_DIR = "experiments"
@@ -23,35 +23,44 @@ CACHED_ACTIVATIONS_DIR = f"{BASE_DIR}/{MODEL_SHORT_NAME}/cached_activations"
 RESULTS_DIR = f"{BASE_DIR}/{MODEL_SHORT_NAME}/results"  # Base results directory
 MMLU_FILE = "mmlu_data/test.json"
 
-def get_results_dir(num_examples: int = None, filter_reliable: bool = False) -> str:
+def get_results_dir(num_examples: int = None, filter_reliable: bool = False, prompt_name: str = None) -> str:
     """
-    Get results directory path organized by number of examples and filter status.
+    Get results directory path organized by prompt, number of examples and filter status.
     
     Args:
         num_examples: Number of examples (default: DEFAULT_NUM_EXAMPLES)
         filter_reliable: Whether using filtered data (default: False)
+        prompt_name: Prompt name (e.g., "benign", "semimalign", "lie_detector"). 
+                     If None or standard prompts, uses default structure.
+                     Special prompts like "lie_detector" get separate directories.
         
     Returns:
         Path to results subdirectory
     """
     num_examples = num_examples or DEFAULT_NUM_EXAMPLES
     filter_suffix = "filtered" if filter_reliable else "unfiltered"
-    return f"{RESULTS_DIR}/n{num_examples}_{filter_suffix}"
+    
+    # Special handling for lie_detector and potentially other specialized experiments
+    if prompt_name == "lie_detector":
+        return f"{RESULTS_DIR}/lie_detector/n{num_examples}_{filter_suffix}"
+    else:
+        # Default structure for benign, semimalign, etc.
+        return f"{RESULTS_DIR}/n{num_examples}_{filter_suffix}"
 
 # Generation parameters
-MAX_NEW_TOKENS = 100 #900 #100
+MAX_NEW_TOKENS = 6 #100 #900 #100
 TEMPERATURE = 1.0  # Sampling temperature
 
 # Experiment parameters
 DEFAULT_LAYER = 30
 DEFAULT_NUM_EXAMPLES = 2000
-DEFAULT_TOKEN_POSITION = "letter"
+DEFAULT_TOKEN_POSITION = "yes-no"
 # ["linear_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
 DEFAULT_EXPERIMENTS = ["linear_probe"] #["linear_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
 
 # Positions to cache in unified cache (excludes "all" and "all_appended" which can be computed from others)
 # CACHED_POSITIONS = [DEFAULT_TOKEN_POSITION] #["last", "first", "middle", "letter"]
-CACHED_POSITIONS = ["last", "first", "middle", "letter", "letter+1"]
+CACHED_POSITIONS = ["last", "first", "middle", "letter", "letter+1", "yes-no"]
 
 # SUPPORTED_LAYERS = [DEFAULT_LAYER] #[0, 2, 5, 10, 15, 20, 25, 30, 36, 42, 45, 47]
 SUPPORTED_LAYERS = [0, 2, 5, 10, 15, 20, 25, 30, 36, 42, 45, 47]
@@ -60,8 +69,8 @@ DEFAULT_LAYER_SWEEP = [0, 2, 5, 10, 20, 30, 36, 42, 45, 47]
 # for layer in DEFAULT_LAYER_SWEEP:
 #     assert layer in SUPPORTED_LAYERS, f"Layer {layer} not in supported layers"
 
-SUPPORTED_POSITIONS = ["last", "first", "middle", "all", "all_appended", "letter", "letter+1"]
-DEFAULT_POSITION_SWEEP = ["last", "first", "middle", "letter", "all_appended", "letter+1"]
+SUPPORTED_POSITIONS = ["last", "first", "middle", "all", "all_appended", "letter", "letter+1", "yes-no"]
+DEFAULT_POSITION_SWEEP = ["last", "first", "middle", "letter", "all_appended", "letter+1", "yes-no"]
 
 # Probe training parameters
 PROBE_MAX_ITER = 1000

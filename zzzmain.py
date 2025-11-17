@@ -8,6 +8,7 @@ config.DEFAULT_LAYER_SWEEP at position letter
 '''
 
 sweep.sweep_layers(
+    prompt_name="lie_detector",
     layers=config.DEFAULT_LAYER_SWEEP,
     token_position=config.DEFAULT_TOKEN_POSITION,
     num_examples=config.DEFAULT_NUM_EXAMPLES,
@@ -18,6 +19,7 @@ sweep.sweep_layers(
 )
 
 sweep.sweep_positions(
+    prompt_name="lie_detector",
     layer=config.DEFAULT_LAYER,
     positions=config.DEFAULT_POSITION_SWEEP,
     num_examples=config.DEFAULT_NUM_EXAMPLES,

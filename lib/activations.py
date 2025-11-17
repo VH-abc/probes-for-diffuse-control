@@ -20,7 +20,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 print(f"done importing in activations.py ({time.time() - start_time:.2f}s)")
 
-TokenPosition = Literal["last", "first", "middle", "all", "all_appended", "letter", "letter+1"]
+TokenPosition = Literal["last", "first", "middle", "all", "all_appended", "letter", "letter+1", "yes-no"]
 
 ENSURE_MODEL_CACHED = False
 
@@ -70,6 +70,47 @@ def find_letter_token_position(
         if found_your_answer and '\\' in tokenized[i] and tokenized[i+1:i+3] == ['box', '{']:
             letter_pos = i+3 # the index of the answer letter *in the completion*
             return letter_pos
+    return None
+
+
+def find_yes_no_token_position(
+    full_text: str,
+    completion: str,
+    tokenizer,
+    input_ids: "torch.Tensor"
+) -> Optional[int]:
+    """
+    Find the token position where "yes" or "no" appears after "Assistant:" *in the full text*.
+    
+    This is specifically for lie detector experiments where the model responds yes/no
+    to "Did you give the correct answer?"
+    
+    Args:
+        full_text: The full text (prompt + completion)
+        completion: Just the completion part
+        tokenizer: The tokenizer
+        input_ids: Token IDs for the full text
+    
+    Returns:
+        Token position index, or None if not found
+    """
+    tokenized = [tokenizer.decode(x, skip_special_tokens=False) for x in input_ids]
+    
+    # Find "Assistant:" and then look for yes/no shortly after
+    found_assistant = False
+    for i in range(len(tokenized)):
+        token_lower = tokenized[i].lower().strip()
+        
+        if not found_assistant and "assistant" in token_lower:
+            found_assistant = True
+            continue
+        
+        if found_assistant:
+            # Check if this token contains yes or no
+            # Common patterns: "yes", "Yes", " yes", "no", "No", " no"
+            if "yes" in token_lower or "no" in token_lower:
+                return i
+    
     return None
 
 
@@ -187,6 +228,8 @@ def extract_all_layers_all_positions_single_gpu(
         
         if "letter" in positions_to_extract and completions is None:
             raise ValueError("completions must be provided when extracting 'letter' position")
+        if "yes-no" in positions_to_extract and completions is None:
+            raise ValueError("completions must be provided when extracting 'yes-no' position")
         
         print(f"[GPU {gpu_id}] Extracting activations (batch_size={batch_size})...")
         
@@ -230,6 +273,26 @@ def extract_all_layers_all_positions_single_gpu(
                             else:
                                 # Fallback to last
                                 print(f"Warning: No letter token found for {full_text}, falling back to last token")
+                                fallback_positions = get_probe_positions(input_ids, special_token_ids, "last")
+                                position_to_token_indices[position] = fallback_positions
+                                if len(probed_tokens_by_position[position]) == text_idx:
+                                    probed_tokens_by_position[position].append(
+                                        tokenizer.decode([input_ids[fallback_positions[0]]], skip_special_tokens=False)
+                                    )
+                        elif position == "yes-no":
+                            completion = completions[text_idx] if completions else ""
+                            yes_no_pos = find_yes_no_token_position(
+                                full_text, completion, tokenizer, input_ids
+                            )
+                            if yes_no_pos is not None:
+                                probed_token_str = tokenizer.decode([input_ids[yes_no_pos]], skip_special_tokens=False)
+                                position_to_token_indices[position] = [yes_no_pos]
+                                if text_idx < len(full_texts):  # Only record once
+                                    if len(probed_tokens_by_position[position]) == text_idx:
+                                        probed_tokens_by_position[position].append(probed_token_str)
+                            else:
+                                # Fallback to last
+                                print(f"Warning: No yes-no token found for text, falling back to last token")
                                 fallback_positions = get_probe_positions(input_ids, special_token_ids, "last")
                                 position_to_token_indices[position] = fallback_positions
                                 if len(probed_tokens_by_position[position]) == text_idx:

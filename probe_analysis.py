@@ -22,6 +22,7 @@ import numpy as np
 import config
 from lib.probes import (
     train_linear_probe,
+    train_mlp_probe,
     anomaly_detection,
     measure_auroc_vs_training_size,
     measure_label_corruption_robustness
@@ -127,8 +128,8 @@ def run_probe_analysis(
     num_examples = num_examples or config.DEFAULT_NUM_EXAMPLES
     experiments = experiments or config.DEFAULT_EXPERIMENTS
 
-    # Get organized results directory
-    results_dir = config.get_results_dir(num_examples, filter_reliable)
+    # Get organized results directory (includes prompt_name for special experiments)
+    results_dir = config.get_results_dir(num_examples, filter_reliable, prompt_name)
     os.makedirs(results_dir, exist_ok=True)
 
     print("\n" + "#" * 80)
@@ -210,10 +211,45 @@ def run_probe_analysis(
             fname
         )
 
-    # Experiment 2: PCA Visualization
+    # Experiment 2: Non-linear Classifier (MLP)
+    if "mlp_probe" in experiments or experiments == "all":
+        print(f"\n{'=' * 60}")
+        print(f"Experiment 2: MLP Probe (Non-linear Classifier)")
+        print(f"{'=' * 60}")
+
+        auroc_mlp, clf_mlp, y_pred_proba_mlp, fpr_mlp, tpr_mlp = train_mlp_probe(
+            X_train, y_train, X_test, y_test,
+            hidden_layer_sizes=(100,),  # Single hidden layer with 100 units
+            max_iter=config.PROBE_MAX_ITER,
+            random_state=config.PROBE_RANDOM_STATE
+        )
+        print(f"  AUROC: {auroc_mlp:.4f}")
+
+        # Save AUROC
+        auroc_file_mlp = os.path.join(results_dir, f"mlp_auroc_{fname}.json")
+        with open(auroc_file_mlp, 'w') as f:
+            json.dump({'auroc': float(auroc_mlp), 'fname': fname, 'classifier': 'mlp'}, f, indent=2)
+
+        # Visualizations
+        plot_roc_curve(
+            fpr_mlp, tpr_mlp, auroc_mlp,
+            os.path.join(results_dir, f"mlp_roc_{fname}.png"),
+            f"ROC Curve (MLP) - {fname}"
+        )
+        
+        # For MLP, use predict_proba scores since it doesn't have decision_function
+        # Convert probabilities to decision scores: log-odds
+        mlp_scores = np.log(y_pred_proba_mlp / (1 - y_pred_proba_mlp + 1e-10))
+        plot_score_distribution(
+            mlp_scores, y_test,
+            os.path.join(results_dir, f"mlp_scores_{fname}.png"),
+            f"Score Distribution (MLP) - {fname}"
+        )
+
+    # Experiment 3: PCA Visualization
     if "pca" in experiments or experiments == "all":
         print(f"\n{'=' * 60}")
-        print(f"Experiment 2: PCA Visualization")
+        print(f"Experiment 3: PCA Visualization")
         print(f"{'=' * 60}")
 
         plot_pca(
@@ -235,10 +271,10 @@ def run_probe_analysis(
                 probed_tokens=test_probed_tokens
             )
 
-    # Experiment 3: Anomaly Detection
+    # Experiment 4: Anomaly Detection
     if "anomaly_detection" in experiments or experiments == "all":
         print(f"\n{'=' * 60}")
-        print(f"Experiment 3: Anomaly Detection")
+        print(f"Experiment 4: Anomaly Detection")
         print(f"  (Correct as normal, Incorrect as anomaly)")
         print(f"{'=' * 60}")
 
@@ -253,10 +289,10 @@ def run_probe_analysis(
             f"Anomaly Detection ROC - {fname}"
         )
 
-    # Experiment 4: AUROC vs Training Set Size
+    # Experiment 5: AUROC vs Training Set Size
     if "auroc_vs_n" in experiments or experiments == "all":
         print(f"\n{'=' * 60}")
-        print(f"Experiment 4: AUROC vs Training Set Size")
+        print(f"Experiment 5: AUROC vs Training Set Size")
         print(f"{'=' * 60}")
 
         results = measure_auroc_vs_training_size(
@@ -276,10 +312,10 @@ def run_probe_analysis(
             os.path.join(results_dir, f"auroc_vs_n_{fname}.png")
         )
 
-    # Experiment 5: Label Corruption Robustness
+    # Experiment 6: Label Corruption Robustness
     if "corruption_sweep" in experiments or experiments == "all":
         print(f"\n{'=' * 60}")
-        print(f"Experiment 5: Label Corruption Robustness")
+        print(f"Experiment 6: Label Corruption Robustness")
         print(f"{'=' * 60}")
 
         results = measure_label_corruption_robustness(

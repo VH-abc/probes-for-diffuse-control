@@ -31,6 +31,8 @@ def check_cache_exists(prompt_name: str, layer: int, token_position: str, num_ex
     With unified caching, we cache ALL layers × ALL positions in one go,
     so we just need to check if the unified cache directory exists.
     
+    Special handling for "lie_detector" which uses a different cache structure.
+    
     Args:
         prompt_name: Prompt name
         layer: Layer index
@@ -41,7 +43,12 @@ def check_cache_exists(prompt_name: str, layer: int, token_position: str, num_ex
     Returns:
         True if unified cache exists with this layer/position, False otherwise
     """
-    cache_prompt_name = f"{prompt_name}_filtered" if filter_reliable else prompt_name
+    # Handle lie_detector cache naming
+    if prompt_name == "lie_detector":
+        cache_prompt_name = "lie_detector_filtered" if filter_reliable else "lie_detector"
+    else:
+        cache_prompt_name = f"{prompt_name}_filtered" if filter_reliable else prompt_name
+    
     filter_suffix = "filtered" if filter_reliable else "unfiltered"
     cache_name = f"unified_n{num_examples}_{filter_suffix}"
     unified_cache_dir = os.path.join(config.CACHED_ACTIVATIONS_DIR, cache_prompt_name, cache_name)
@@ -130,17 +137,29 @@ def sweep(
                 print(f"  This will cache: {config.SUPPORTED_LAYERS}")
                 print(f"  Positions: {config.CACHED_POSITIONS}")
                 
-                # Lazy import
-                from cache_activations_unified import cache_mmlu_activations_unified
-                
-                cache_mmlu_activations_unified(
-                    prompt_name=prompt_name,
-                    layer_indices=config.SUPPORTED_LAYERS,
-                    positions_to_cache=config.CACHED_POSITIONS,
-                    num_examples=num_examples,
-                    filter_reliable=filter_reliable,
-                    reliable_questions_file=reliable_questions_file
-                )
+                # Lazy import - use specialized caching for lie_detector
+                if prompt_name == "lie_detector":
+                    print(f"  Using specialized two-pass caching for lie_detector")
+                    from cache_lie_detector_activations import cache_lie_detector_activations
+                    
+                    cache_lie_detector_activations(
+                        layer_indices=config.SUPPORTED_LAYERS,
+                        positions_to_cache=config.CACHED_POSITIONS,
+                        num_examples=num_examples,
+                        filter_reliable=filter_reliable,
+                        reliable_questions_file=reliable_questions_file
+                    )
+                else:
+                    from cache_activations_unified import cache_mmlu_activations_unified
+                    
+                    cache_mmlu_activations_unified(
+                        prompt_name=prompt_name,
+                        layer_indices=config.SUPPORTED_LAYERS,
+                        positions_to_cache=config.CACHED_POSITIONS,
+                        num_examples=num_examples,
+                        filter_reliable=filter_reliable,
+                        reliable_questions_file=reliable_questions_file
+                    )
                 print(f"✓ Unified cache created successfully")
         print(f"{'='*80}\n")
 
@@ -185,7 +204,7 @@ def sweep(
     if successful_pairs and not skip_analysis:
         generate_comparison(prompt_name, successful_pairs, num_examples, filter_reliable)
 
-    results_dir = config.get_results_dir(num_examples, filter_reliable)
+    results_dir = config.get_results_dir(num_examples, filter_reliable, prompt_name)
     print(f"\n{'#' * 80}")
     print(f"# SWEEP COMPLETE")
     print(f"# Successful: {len(successful_pairs)}/{len(pairs)} pairs")
@@ -275,7 +294,7 @@ def generate_comparison(prompt_name: str, pairs: List[Tuple[int, str]], num_exam
     print(f"{'=' * 80}\n")
     
     filter_suffix = "filtered" if filter_reliable else "unfiltered"
-    results_dir = config.get_results_dir(num_examples, filter_reliable)
+    results_dir = config.get_results_dir(num_examples, filter_reliable, prompt_name)
 
     results = {}
     for layer, position in pairs:
