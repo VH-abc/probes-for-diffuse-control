@@ -34,6 +34,7 @@ from lib.visualization import (
     plot_pca,
     plot_pca_by_subject,
     plot_auroc_vs_training_size,
+    plot_auroc_vs_training_size_combined,
     plot_label_corruption_robustness,
     save_training_analysis
 )
@@ -239,9 +240,15 @@ def run_probe_analysis(
         else:
             auroc_mlp, clf_mlp, y_pred_proba_mlp, fpr_mlp, tpr_mlp = train_mlp_probe(
                 X_train, y_train, X_test, y_test,
-                hidden_layer_sizes=config.MLP_HIDDEN_LAYER_SIZES,  # Single hidden layer with 12k units + skip connections
+                hidden_layer_sizes=config.MLP_HIDDEN_LAYER_SIZES,
                 max_iter=config.PROBE_MAX_ITER,
-                random_state=config.PROBE_RANDOM_STATE
+                random_state=config.PROBE_RANDOM_STATE,
+                learning_rate=config.MLP_LEARNING_RATE,
+                weight_decay=config.MLP_WEIGHT_DECAY,
+                dropout=config.MLP_DROPOUT,
+                patience=config.MLP_PATIENCE,
+                lr_scheduler=config.MLP_LR_SCHEDULER,
+                use_constant_residual=config.MLP_USE_CONSTANT_RESIDUAL
             )
             print(f"  AUROC: {auroc_mlp:.4f}")
 
@@ -309,12 +316,13 @@ def run_probe_analysis(
         )
 
     # Experiment 5: AUROC vs Training Set Size (Linear Probe)
+    results_linear = None
     if "auroc_vs_n" in experiments or experiments == "all":
         print(f"\n{'=' * 60}")
         print(f"Experiment 5: AUROC vs Training Set Size (Linear Probe)")
         print(f"{'=' * 60}")
 
-        results = measure_auroc_vs_training_size(
+        results_linear = measure_auroc_vs_training_size(
             activations, labels,
             n_values=None,
             n_trials=10,
@@ -322,17 +330,18 @@ def run_probe_analysis(
             random_state=config.PROBE_RANDOM_STATE
         )
 
-        for n, errors in results.items():
+        for n, errors in results_linear.items():
             if errors:
                 print(f"  N={n}: Error = {np.mean(errors):.4f} ± {np.std(errors):.4f}")
 
         plot_auroc_vs_training_size(
-            results,
+            results_linear,
             os.path.join(results_dir, f"auroc_vs_n_{fname}.png"),
             title="Linear Probe Error vs Training Set Size"
         )
 
     # Experiment 5b: AUROC vs Training Set Size (MLP Probe)
+    results_mlp = None
     if "auroc_vs_n_mlp" in experiments or experiments == "all":
         print(f"\n{'=' * 60}")
         print(f"Experiment 5b: AUROC vs Training Set Size (MLP Probe)")
@@ -342,14 +351,14 @@ def run_probe_analysis(
             activations, labels,
             n_values=None,
             n_trials=10,
-            hidden_layer_sizes=(12000,),
+            hidden_layer_sizes=config.MLP_HIDDEN_LAYER_SIZES,
             max_iter=config.PROBE_MAX_ITER,
-            learning_rate=0.001,
-            weight_decay=1e-4,
-            dropout=0.1,
-            patience=10,
-            lr_scheduler=None,
-            use_constant_residual=False,
+            learning_rate=config.MLP_LEARNING_RATE,
+            weight_decay=config.MLP_WEIGHT_DECAY,
+            dropout=config.MLP_DROPOUT,
+            patience=config.MLP_PATIENCE,
+            lr_scheduler=config.MLP_LR_SCHEDULER,
+            use_constant_residual=config.MLP_USE_CONSTANT_RESIDUAL,
             random_state=config.PROBE_RANDOM_STATE
         )
 
@@ -362,6 +371,20 @@ def run_probe_analysis(
             os.path.join(results_dir, f"auroc_vs_n_mlp_{fname}.png"),
             title="MLP Probe Error vs Training Set Size"
         )
+    
+    # Combined plot (if both experiments were run)
+    if results_linear is not None and results_mlp is not None:
+        print(f"\n{'=' * 60}")
+        print(f"Creating Combined AUROC vs N Plot")
+        print(f"{'=' * 60}")
+        
+        plot_auroc_vs_training_size_combined(
+            results_linear,
+            results_mlp,
+            os.path.join(results_dir, f"auroc_vs_n_combined_{fname}.png"),
+            title="Probe Error vs Training Set Size (Linear vs MLP)"
+        )
+        print(f"  ✓ Combined plot saved")
 
     # Experiment 6: Label Corruption Robustness
     if "corruption_sweep" in experiments or experiments == "all":

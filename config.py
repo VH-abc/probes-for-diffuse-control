@@ -53,10 +53,10 @@ TEMPERATURE = 1.0  # Sampling temperature
 
 # Experiment parameters
 DEFAULT_LAYER = 30
-DEFAULT_NUM_EXAMPLES = 2000
+DEFAULT_NUM_EXAMPLES = 20000
 DEFAULT_TOKEN_POSITION = "letter"
-# Available experiments: ["linear_probe", "mlp_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
-DEFAULT_EXPERIMENTS = ["linear_probe", "mlp_probe"] #["linear_probe", "mlp_probe", "pca", "anomaly_detection", "auroc_vs_n", "auroc_vs_n_mlp", "corruption_sweep"]
+# Available experiments: ["linear_probe", "mlp_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep", "auroc_vs_n_mlp"]
+DEFAULT_EXPERIMENTS = "all" #["linear_probe", "mlp_probe"] #["linear_probe", "mlp_probe", "pca", "anomaly_detection", "auroc_vs_n", "auroc_vs_n_mlp", "corruption_sweep"]
 
 # Positions to cache in unified cache (excludes "all" and "all_appended" which can be computed from others)
 # CACHED_POSITIONS = [DEFAULT_TOKEN_POSITION] #["last", "first", "middle", "letter"]
@@ -75,7 +75,16 @@ DEFAULT_POSITION_SWEEP = ["letter", "all_appended", "letter+1", "yes-no", "last"
 # Probe training parameters
 PROBE_MAX_ITER = 1000
 PROBE_RANDOM_STATE = 42
-MLP_HIDDEN_LAYER_SIZES = (24000, 24000)
+
+# MLP Probe Configuration (optimal from hyperparameter search)
+# Best AUROC: 0.8548 on Layer 30, Position: letter, n=2000
+MLP_HIDDEN_LAYER_SIZES = (12000, 6000)  # Two-layer pyramidal architecture
+MLP_LEARNING_RATE = 0.001
+MLP_WEIGHT_DECAY = 0.08
+MLP_DROPOUT = 0.1
+MLP_PATIENCE = 10
+MLP_LR_SCHEDULER = None
+MLP_USE_CONSTANT_RESIDUAL = False
 
 # Multiprocessing parameters
 MAX_CONCURRENT_REQUESTS_PER_SERVER = 10  # For VLLM API calls
@@ -83,7 +92,7 @@ ACTIVATION_BATCH_SIZE = 1000 # Batch size for activation extraction (reduce if O
 
 # Visualization parameters
 N_ANNOTATE = 30
-SAVE_PLOTS = False  # Set to False to suppress creation of .png files
+SAVE_PLOTS = True  # Set to False to suppress creation of .png files
 
 # Verbosity settings
 # 0 = Silent (only errors and final results)

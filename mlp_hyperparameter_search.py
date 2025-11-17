@@ -484,6 +484,104 @@ def run_hyperparameter_search(
         "use_constant_residual": True
     })
     
+    # Higher Weight Decay Sweep (based on trend showing 0.05 was best)
+    print("\nConfiguration Set 9: Higher Weight Decay Sweep")
+    print("=" * 80)
+    higher_weight_decays = [0.06, 0.08, 0.1, 0.15, 0.2]
+    for wd in higher_weight_decays:
+        configs_to_test.append({
+            "name": "higher_wd_sweep",
+            "hidden_layer_sizes": (12000,),
+            "learning_rate": 0.001,
+            "weight_decay": wd,
+            "dropout": 0.1,
+            "patience": 10,
+            "max_iter": 1000,
+            "lr_scheduler": None
+        })
+    
+    # Larger single layers with high weight decay
+    print("\nConfiguration Set 10: Larger Architectures with High Regularization")
+    print("=" * 80)
+    large_archs = [(16000,), (20000,), (24000,), (32000,)]
+    for arch in large_archs:
+        configs_to_test.append({
+            "name": "large_arch_high_wd",
+            "hidden_layer_sizes": arch,
+            "learning_rate": 0.001,
+            "weight_decay": 0.05,
+            "dropout": 0.1,
+            "patience": 10,
+            "max_iter": 1000,
+            "lr_scheduler": None
+        })
+    
+    # Two-layer pyramidal with higher weight decay
+    print("\nConfiguration Set 11: Pyramidal Architectures with High Weight Decay")
+    print("=" * 80)
+    pyramidal_archs = [(8000, 4000), (12000, 6000), (10000, 5000), (16000, 8000)]
+    high_wds = [0.05, 0.08, 0.1]
+    for arch in pyramidal_archs:
+        for wd in high_wds:
+            configs_to_test.append({
+                "name": "pyramidal_high_wd",
+                "hidden_layer_sizes": arch,
+                "learning_rate": 0.001,
+                "weight_decay": wd,
+                "dropout": 0.1,
+                "patience": 10,
+                "max_iter": 1000,
+                "lr_scheduler": None
+            })
+    
+    # Combined high regularization (high WD + high dropout)
+    print("\nConfiguration Set 12: Combined High Regularization")
+    print("=" * 80)
+    for wd in [0.08, 0.1, 0.15]:
+        for drop in [0.2, 0.3]:
+            configs_to_test.append({
+                "name": "combined_high_reg",
+                "hidden_layer_sizes": (12000,),
+                "learning_rate": 0.001,
+                "weight_decay": wd,
+                "dropout": drop,
+                "patience": 10,
+                "max_iter": 1000,
+                "lr_scheduler": None
+            })
+    
+    # Fine-tuning around best config (WD=0.05)
+    print("\nConfiguration Set 13: Fine-tune Weight Decay Around 0.05")
+    print("=" * 80)
+    fine_tune_wds = [0.04, 0.045, 0.055, 0.06, 0.065, 0.07]
+    for wd in fine_tune_wds:
+        configs_to_test.append({
+            "name": "finetune_wd",
+            "hidden_layer_sizes": (12000,),
+            "learning_rate": 0.001,
+            "weight_decay": wd,
+            "dropout": 0.1,
+            "patience": 10,
+            "max_iter": 1000,
+            "lr_scheduler": None
+        })
+    
+    # Lower learning rate with high weight decay
+    print("\nConfiguration Set 14: Lower LR with High Weight Decay")
+    print("=" * 80)
+    for lr in [0.0005, 0.00075]:
+        for wd in [0.05, 0.08, 0.1]:
+            configs_to_test.append({
+                "name": "low_lr_high_wd",
+                "hidden_layer_sizes": (12000,),
+                "learning_rate": lr,
+                "weight_decay": wd,
+                "dropout": 0.1,
+                "patience": 10,
+                "max_iter": 1000,
+                "lr_scheduler": None
+            })
+    
     # Add use_constant_residual=False to all previous configs that don't have it
     for cfg in configs_to_test:
         if "use_constant_residual" not in cfg:

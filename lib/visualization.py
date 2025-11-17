@@ -393,6 +393,51 @@ def plot_auroc_vs_training_size(
     plt.close()
 
 
+def plot_auroc_vs_training_size_combined(
+    results_linear: dict,
+    results_mlp: dict,
+    output_path: str,
+    title: str = "Probe Error vs Training Set Size"
+):
+    """
+    Plot how probe error varies with training set size for both linear and MLP probes.
+
+    Args:
+        results_linear: Dictionary mapping training sizes to lists of error rates (linear probe)
+        results_mlp: Dictionary mapping training sizes to lists of error rates (MLP probe)
+        output_path: Path to save plot
+        title: Plot title
+    """
+    import matplotlib.pyplot as plt
+    
+    n_values = sorted(results_linear.keys())
+    
+    # Linear probe
+    means_linear = [np.mean(results_linear[n]) if results_linear[n] else np.nan for n in n_values]
+    stds_linear = [np.std(results_linear[n]) if results_linear[n] else 0 for n in n_values]
+    
+    # MLP probe
+    means_mlp = [np.mean(results_mlp[n]) if results_mlp[n] else np.nan for n in n_values]
+    stds_mlp = [np.std(results_mlp[n]) if results_mlp[n] else 0 for n in n_values]
+
+    plt.figure(figsize=(10, 6))
+    plt.errorbar(n_values, means_linear, yerr=stds_linear, marker='o', capsize=5, 
+                 linewidth=2, markersize=8, label='Linear Probe', alpha=0.8)
+    plt.errorbar(n_values, means_mlp, yerr=stds_mlp, marker='s', capsize=5, 
+                 linewidth=2, markersize=8, label='MLP Probe', alpha=0.8)
+    plt.xscale('log')
+    plt.xticks(n_values, [str(n) for n in n_values])
+    plt.xlabel('Training Set Size (N)', fontsize=12)
+    plt.ylabel('Error (1 - AUROC)', fontsize=12)
+    plt.title(title, fontsize=14)
+    plt.legend(fontsize=11, loc='best')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    if config.SAVE_PLOTS:
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
+
+
 def plot_label_corruption_robustness(
     results: dict,
     output_path: str,
