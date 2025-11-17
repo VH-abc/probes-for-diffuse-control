@@ -54,9 +54,9 @@ TEMPERATURE = 1.0  # Sampling temperature
 # Experiment parameters
 DEFAULT_LAYER = 30
 DEFAULT_NUM_EXAMPLES = 2000
-DEFAULT_TOKEN_POSITION = "yes-no"
-# ["linear_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
-DEFAULT_EXPERIMENTS = ["linear_probe"] #["linear_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
+DEFAULT_TOKEN_POSITION = "letter"
+# Available experiments: ["linear_probe", "mlp_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
+DEFAULT_EXPERIMENTS = ["linear_probe", "mlp_probe"] #["linear_probe", "mlp_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep"]
 
 # Positions to cache in unified cache (excludes "all" and "all_appended" which can be computed from others)
 # CACHED_POSITIONS = [DEFAULT_TOKEN_POSITION] #["last", "first", "middle", "letter"]
@@ -70,11 +70,12 @@ DEFAULT_LAYER_SWEEP = [0, 2, 5, 10, 20, 30, 36, 42, 45, 47]
 #     assert layer in SUPPORTED_LAYERS, f"Layer {layer} not in supported layers"
 
 SUPPORTED_POSITIONS = ["last", "first", "middle", "all", "all_appended", "letter", "letter+1", "yes-no"]
-DEFAULT_POSITION_SWEEP = ["last", "first", "middle", "letter", "all_appended", "letter+1", "yes-no"]
+DEFAULT_POSITION_SWEEP = ["letter", "all_appended", "letter+1", "yes-no", "last"]
 
 # Probe training parameters
 PROBE_MAX_ITER = 1000
 PROBE_RANDOM_STATE = 42
+MLP_HIDDEN_LAYER_SIZES = (24000, 24000)
 
 # Multiprocessing parameters
 MAX_CONCURRENT_REQUESTS_PER_SERVER = 10  # For VLLM API calls
@@ -82,6 +83,14 @@ ACTIVATION_BATCH_SIZE = 1000 # Batch size for activation extraction (reduce if O
 
 # Visualization parameters
 N_ANNOTATE = 30
+SAVE_PLOTS = True  # Set to False to suppress creation of .png files
+
+# Verbosity settings
+# 0 = Silent (only errors and final results)
+# 1 = Minimal (key milestones only)
+# 2 = Normal (default - all status updates)
+# 3 = Verbose (includes debug information)
+VERBOSITY = 0
 
 def get_config():
     """Return a dictionary with all configuration settings."""
@@ -105,6 +114,7 @@ def get_config():
         "probe_random_state": PROBE_RANDOM_STATE,
         "max_concurrent_requests_per_server": MAX_CONCURRENT_REQUESTS_PER_SERVER,
         "activation_batch_size": ACTIVATION_BATCH_SIZE,
+        "save_plots": SAVE_PLOTS,
     }
 
 

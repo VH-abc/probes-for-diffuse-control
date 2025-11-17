@@ -15,6 +15,23 @@ from typing import List, Tuple, Optional
 
 import config
 
+
+def vprint(message: str, level: int = 2):
+    """
+    Verbosity-aware print function.
+    
+    Args:
+        message: Message to print
+        level: Verbosity level required to print this message
+            0 = Critical (always print)
+            1 = Minimal (key milestones)
+            2 = Normal (status updates)
+            3 = Verbose (debug info)
+    """
+    if config.VERBOSITY >= level:
+        print(message)
+
+
 # Check for MMLU data at module load time
 def _ensure_mmlu_data():
     if not os.path.exists("mmlu_data"):
@@ -166,9 +183,9 @@ def sweep(
     successful_pairs = []
 
     for i, (layer, position) in enumerate(pairs, 1):
-        print(f"\n{'█' * 80}")
-        print(f"█ PROCESSING PAIR {i}/{len(pairs)}: Layer {layer}, Position '{position}'")
-        print(f"{'█' * 80}\n")
+        vprint(f"\n{'█' * 80}", level=1)
+        vprint(f"█ PROCESSING PAIR {i}/{len(pairs)}: Layer {layer}, Position '{position}'", level=1)
+        vprint(f"{'█' * 80}\n", level=1)
 
         # Step 1: Verify cache exists (should exist after Step 0)
         if not skip_cache:
@@ -198,7 +215,7 @@ def sweep(
             print(f"⏩ Skipping analysis")
 
         successful_pairs.append((layer, position))
-        print(f"✓ Layer {layer}, position '{position}' complete")
+        vprint(f"✓ Layer {layer}, position '{position}' complete", level=1)
 
     # Generate comparison report
     if successful_pairs and not skip_analysis:
@@ -296,59 +313,91 @@ def generate_comparison(prompt_name: str, pairs: List[Tuple[int, str]], num_exam
     filter_suffix = "filtered" if filter_reliable else "unfiltered"
     results_dir = config.get_results_dir(num_examples, filter_reliable, prompt_name)
 
-    results = {}
+    linear_results = {}
+    mlp_results = {}
+    
     for layer, position in pairs:
-        # Load AUROC
+        # Load Linear Probe AUROC
         auroc_file = os.path.join(
             results_dir,
             f"auroc_layer{layer}_pos-{position}_n{num_examples}_{filter_suffix}.json"
         )
-
         if os.path.exists(auroc_file):
             with open(auroc_file, 'r') as f:
                 auroc_data = json.load(f)
-                results[(layer, position)] = auroc_data.get('auroc', None)
+                linear_results[(layer, position)] = auroc_data.get('auroc', None)
+        
+        # Load MLP Probe AUROC
+        mlp_auroc_file = os.path.join(
+            results_dir,
+            f"mlp_auroc_layer{layer}_pos-{position}_n{num_examples}_{filter_suffix}.json"
+        )
+        if os.path.exists(mlp_auroc_file):
+            with open(mlp_auroc_file, 'r') as f:
+                mlp_auroc_data = json.load(f)
+                mlp_results[(layer, position)] = mlp_auroc_data.get('auroc', None)
 
     # Print table
-    print(f"{'Layer':<10} {'Position':<15} {'AUROC':<12}")
-    print(f"{'-' * 40}")
+    print(f"{'Layer':<10} {'Position':<15} {'Linear AUROC':<15} {'MLP AUROC':<15}")
+    print(f"{'-' * 60}")
 
-    best_pair = None
-    best_auroc = 0.0
+    best_linear_pair = None
+    best_linear_auroc = 0.0
+    best_mlp_pair = None
+    best_mlp_auroc = 0.0
 
     for layer, position in pairs:
-        auroc = results.get((layer, position), None)
-        auroc_str = f"{auroc:.4f}" if auroc is not None else "N/A"
-        print(f"{layer:<10} {position:<15} {auroc_str:<12}")
+        linear_auroc = linear_results.get((layer, position), None)
+        mlp_auroc = mlp_results.get((layer, position), None)
+        
+        linear_str = f"{linear_auroc:.4f}" if linear_auroc is not None else "N/A"
+        mlp_str = f"{mlp_auroc:.4f}" if mlp_auroc is not None else "N/A"
+        
+        print(f"{layer:<10} {position:<15} {linear_str:<15} {mlp_str:<15}")
 
-        if auroc is not None and auroc > best_auroc:
-            best_auroc = auroc
-            best_pair = (layer, position)
+        # Track best linear
+        if linear_auroc is not None and linear_auroc > best_linear_auroc:
+            best_linear_auroc = linear_auroc
+            best_linear_pair = (layer, position)
+        
+        # Track best MLP
+        if mlp_auroc is not None and mlp_auroc > best_mlp_auroc:
+            best_mlp_auroc = mlp_auroc
+            best_mlp_pair = (layer, position)
 
-    print(f"\n{'-' * 40}")
-    if best_pair:
-        print(f"\n🏆 BEST: Layer {best_pair[0]}, Position '{best_pair[1]}' (AUROC = {best_auroc:.4f})")
+    print(f"\n{'-' * 60}")
+    if best_linear_pair:
+        print(f"🏆 BEST LINEAR: Layer {best_linear_pair[0]}, Position '{best_linear_pair[1]}' (AUROC = {best_linear_auroc:.4f})")
+    if best_mlp_pair:
+        print(f"🏆 BEST MLP:    Layer {best_mlp_pair[0]}, Position '{best_mlp_pair[1]}' (AUROC = {best_mlp_auroc:.4f})")
 
-    # Save report
+    # Save report (append mode)
     report_file = os.path.join(results_dir, f"sweep_summary_{filter_suffix}.txt")
-    with open(report_file, 'w') as f:
+    with open(report_file, 'a') as f:
         f.write(f"SWEEP SUMMARY\n")
         f.write(f"Model: {config.MODEL_SHORT_NAME}\n")
         f.write(f"Prompt: {prompt_name}\n")
         f.write(f"Filtered: {filter_reliable}\n")
         f.write(f"Examples: {num_examples}\n")
         f.write(f"{'=' * 80}\n\n")
-        f.write(f"{'Layer':<10} {'Position':<15} {'AUROC':<12}\n")
-        f.write(f"{'-' * 40}\n")
+        f.write(f"{'Layer':<10} {'Position':<15} {'Linear AUROC':<15} {'MLP AUROC':<15}\n")
+        f.write(f"{'-' * 60}\n")
         for layer, position in pairs:
-            auroc = results.get((layer, position), None)
-            auroc_str = f"{auroc:.4f}" if auroc is not None else "N/A"
-            f.write(f"{layer:<10} {position:<15} {auroc_str:<12}\n")
-        f.write(f"\n{'-' * 40}\n")
-        if best_pair:
-            f.write(f"\n🏆 BEST: Layer {best_pair[0]}, Position '{best_pair[1]}' (AUROC = {best_auroc:.4f})\n")
+            linear_auroc = linear_results.get((layer, position), None)
+            mlp_auroc = mlp_results.get((layer, position), None)
+            
+            linear_str = f"{linear_auroc:.4f}" if linear_auroc is not None else "N/A"
+            mlp_str = f"{mlp_auroc:.4f}" if mlp_auroc is not None else "N/A"
+            
+            f.write(f"{layer:<10} {position:<15} {linear_str:<15} {mlp_str:<15}\n")
+        f.write(f"\n{'-' * 60}\n")
+        if best_linear_pair:
+            f.write(f"🏆 BEST LINEAR: Layer {best_linear_pair[0]}, Position '{best_linear_pair[1]}' (AUROC = {best_linear_auroc:.4f})\n")
+        if best_mlp_pair:
+            f.write(f"🏆 BEST MLP:    Layer {best_mlp_pair[0]}, Position '{best_mlp_pair[1]}' (AUROC = {best_mlp_auroc:.4f})\n")
+        f.write(f"\n")  # Extra newline between sweep sections
 
-    print(f"\nSummary saved to: {report_file}")
+    print(f"\nSummary appended to: {report_file}")
     print(f"{'=' * 80}\n")
 
 

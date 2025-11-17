@@ -181,8 +181,9 @@ def compare_results(
         plt.tight_layout()
         
         output_file = os.path.join(results_dir, 'filtered_vs_unfiltered_comparison.png')
-        plt.savefig(output_file, dpi=150, bbox_inches='tight')
-        print(f"  ✓ Saved to: {output_file}")
+        if config.SAVE_PLOTS:
+            plt.savefig(output_file, dpi=150, bbox_inches='tight')
+            print(f"  ✓ Saved to: {output_file}")
         
         plt.close()
     

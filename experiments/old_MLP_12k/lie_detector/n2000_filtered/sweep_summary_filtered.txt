@@ -1,0 +1,42 @@
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 2000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+0          letter          0.6051          0.5902         
+2          letter          0.5983          0.6205         
+5          letter          0.5567          0.6029         
+10         letter          0.5859          0.6140         
+20         letter          0.7686          0.7770         
+30         letter          0.8029          0.8358         
+36         letter          0.8020          0.8307         
+42         letter          0.8042          0.8194         
+45         letter          0.8059          0.8287         
+47         letter          0.8120          0.8308         
+
+------------------------------------------------------------
+🏆 BEST LINEAR: Layer 47, Position 'letter' (AUROC = 0.8120)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.8358)
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 2000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          0.8029          0.8358         
+30         letter+1        0.7552          0.8053         
+30         yes-no          0.7240          0.7858         
+30         last            0.7387          0.7732         
+
+------------------------------------------------------------
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8029)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.8358)
+

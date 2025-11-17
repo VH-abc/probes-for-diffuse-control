@@ -93,8 +93,9 @@ def plot_position_comparison(results: dict, layer: int, num_examples: int, outpu
     plt.tight_layout()
     
     output_path = os.path.join(output_dir, f"position_comparison_layer{layer}_n{num_examples}.png")
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
-    print(f"Saved: {output_path}")
+    if config.SAVE_PLOTS:
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+        print(f"Saved: {output_path}")
     plt.close()
 
 
@@ -153,8 +154,9 @@ def create_position_heatmap(layer_range: list, positions: list, num_examples: in
     plt.tight_layout()
     
     output_path = os.path.join(output_dir, f"position_heatmap_layers{layer_range[0]}-{layer_range[-1]}_n{num_examples}.png")
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
-    print(f"Saved: {output_path}")
+    if config.SAVE_PLOTS:
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+        print(f"Saved: {output_path}")
     plt.close()
 
 

@@ -34,7 +34,8 @@ def plot_roc_curve(
     plt.legend(fontsize=11)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    if config.SAVE_PLOTS:
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
 
 
@@ -55,10 +56,28 @@ def plot_score_distribution(
     """
     import matplotlib.pyplot as plt
     
+    # Handle infinite values by clipping to reasonable range
+    # First, find the range of finite values
+    finite_mask = np.isfinite(scores)
+    if np.any(finite_mask):
+        finite_scores = scores[finite_mask]
+        min_val = np.min(finite_scores)
+        max_val = np.max(finite_scores)
+        # Add some margin for extreme finite values
+        margin = (max_val - min_val) * 0.1
+        clip_min = min_val - margin
+        clip_max = max_val + margin
+    else:
+        # Fallback if all values are infinite (shouldn't happen)
+        clip_min, clip_max = -10, 10
+    
+    # Clip scores to finite range
+    scores_clipped = np.clip(scores, clip_min, clip_max)
+    
     plt.figure(figsize=(10, 6))
-    plt.hist(scores[labels == 1], bins=50, alpha=0.6, color='green',
+    plt.hist(scores_clipped[labels == 1], bins=50, alpha=0.6, color='green',
              label='Correct (Class 1)', density=True, edgecolor='black', linewidth=0.5)
-    plt.hist(scores[labels == 0], bins=50, alpha=0.6, color='red',
+    plt.hist(scores_clipped[labels == 0], bins=50, alpha=0.6, color='red',
              label='Incorrect (Class 0)', density=True, edgecolor='black', linewidth=0.5)
     plt.xlabel('Classifier Score', fontsize=12)
     plt.ylabel('Density', fontsize=12)
@@ -66,7 +85,8 @@ def plot_score_distribution(
     plt.legend(fontsize=11)
     plt.grid(True, alpha=0.3, axis='y')
     plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    if config.SAVE_PLOTS:
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
 
 
@@ -126,11 +146,12 @@ def plot_pca(
     plt.legend(fontsize=11)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    if config.SAVE_PLOTS:
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
     
     # Generate markdown file with annotated samples
-    if generated_texts is not None:
+    if config.SAVE_PLOTS and generated_texts is not None:
         markdown_path = output_path.replace('.png', '_annotated_samples.md')
         with open(markdown_path, 'w') as f:
             f.write(f"# Annotated PCA Samples\n\n")
@@ -289,11 +310,12 @@ def plot_pca_by_subject(
     plt.legend(fontsize=8, ncol=2, loc='best')
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    if config.SAVE_PLOTS:
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
     
     # Generate markdown file with subject distribution
-    if generated_texts is not None and subjects is not None:
+    if config.SAVE_PLOTS and generated_texts is not None and subjects is not None:
         markdown_path = output_path.replace('.png', '_subject_info.md')
         with open(markdown_path, 'w') as f:
             f.write(f"# PCA by Subject - Analysis\n\n")
@@ -366,7 +388,8 @@ def plot_auroc_vs_training_size(
     plt.title(title, fontsize=14)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    if config.SAVE_PLOTS:
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
 
 
@@ -397,7 +420,8 @@ def plot_label_corruption_robustness(
     plt.title(title, fontsize=14)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    if config.SAVE_PLOTS:
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
 
 

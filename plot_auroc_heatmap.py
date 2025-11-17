@@ -16,6 +16,8 @@ import seaborn as sns
 from pathlib import Path
 import argparse
 
+import config
+
 
 def parse_auroc_filename(filename):
     """
@@ -121,8 +123,9 @@ def create_heatmap(data, output_path=None, title="AUROC Heatmap"):
     plt.tight_layout()
     
     if output_path:
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        print(f"Heatmap saved to: {output_path}")
+        if config.SAVE_PLOTS:
+            plt.savefig(output_path, dpi=300, bbox_inches='tight')
+            print(f"Heatmap saved to: {output_path}")
     else:
         plt.show()
     

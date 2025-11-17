@@ -182,34 +182,43 @@ def run_probe_analysis(
         print(f"Experiment 1: Linear Probe")
         print(f"{'=' * 60}")
 
-        auroc, clf, y_pred_proba, fpr, tpr = train_linear_probe(
-            X_train, y_train, X_test, y_test,
-            max_iter=config.PROBE_MAX_ITER,
-            random_state=config.PROBE_RANDOM_STATE
-        )
-        print(f"  AUROC: {auroc:.4f}")
-
-        # Save AUROC
         auroc_file = os.path.join(results_dir, f"auroc_{fname}.json")
-        with open(auroc_file, 'w') as f:
-            json.dump({'auroc': float(auroc), 'fname': fname}, f, indent=2)
+        
+        # Check if results already exist
+        if os.path.exists(auroc_file):
+            with open(auroc_file, 'r') as f:
+                auroc_data = json.load(f)
+                auroc = auroc_data.get('auroc')
+            print(f"  ✓ Results already exist (AUROC: {auroc:.4f})")
+            print(f"  Skipping training (delete {auroc_file} to rerun)")
+        else:
+            auroc, clf, y_pred_proba, fpr, tpr = train_linear_probe(
+                X_train, y_train, X_test, y_test,
+                max_iter=config.PROBE_MAX_ITER,
+                random_state=config.PROBE_RANDOM_STATE
+            )
+            print(f"  AUROC: {auroc:.4f}")
 
-        # Visualizations
-        plot_roc_curve(
-            fpr, tpr, auroc,
-            os.path.join(results_dir, f"roc_{fname}.png"),
-            f"ROC Curve - {fname}"
-        )
-        plot_score_distribution(
-            clf.decision_function(X_test), y_test,
-            os.path.join(results_dir, f"scores_{fname}.png"),
-            f"Score Distribution - {fname}"
-        )
-        save_training_analysis(
-            clf, X_train, y_train, train_subjects, train_prompts,
-            os.path.join(results_dir, f"training_analysis_{fname}.txt"),
-            fname
-        )
+            # Save AUROC
+            with open(auroc_file, 'w') as f:
+                json.dump({'auroc': float(auroc), 'fname': fname}, f, indent=2)
+
+            # Visualizations
+            plot_roc_curve(
+                fpr, tpr, auroc,
+                os.path.join(results_dir, f"roc_{fname}.png"),
+                f"ROC Curve - {fname}"
+            )
+            plot_score_distribution(
+                clf.decision_function(X_test), y_test,
+                os.path.join(results_dir, f"scores_{fname}.png"),
+                f"Score Distribution - {fname}"
+            )
+            save_training_analysis(
+                clf, X_train, y_train, train_subjects, train_prompts,
+                os.path.join(results_dir, f"training_analysis_{fname}.txt"),
+                fname
+            )
 
     # Experiment 2: Non-linear Classifier (MLP)
     if "mlp_probe" in experiments or experiments == "all":
@@ -217,34 +226,43 @@ def run_probe_analysis(
         print(f"Experiment 2: MLP Probe (Non-linear Classifier)")
         print(f"{'=' * 60}")
 
-        auroc_mlp, clf_mlp, y_pred_proba_mlp, fpr_mlp, tpr_mlp = train_mlp_probe(
-            X_train, y_train, X_test, y_test,
-            hidden_layer_sizes=(100,),  # Single hidden layer with 100 units
-            max_iter=config.PROBE_MAX_ITER,
-            random_state=config.PROBE_RANDOM_STATE
-        )
-        print(f"  AUROC: {auroc_mlp:.4f}")
-
-        # Save AUROC
         auroc_file_mlp = os.path.join(results_dir, f"mlp_auroc_{fname}.json")
-        with open(auroc_file_mlp, 'w') as f:
-            json.dump({'auroc': float(auroc_mlp), 'fname': fname, 'classifier': 'mlp'}, f, indent=2)
-
-        # Visualizations
-        plot_roc_curve(
-            fpr_mlp, tpr_mlp, auroc_mlp,
-            os.path.join(results_dir, f"mlp_roc_{fname}.png"),
-            f"ROC Curve (MLP) - {fname}"
-        )
         
-        # For MLP, use predict_proba scores since it doesn't have decision_function
-        # Convert probabilities to decision scores: log-odds
-        mlp_scores = np.log(y_pred_proba_mlp / (1 - y_pred_proba_mlp + 1e-10))
-        plot_score_distribution(
-            mlp_scores, y_test,
-            os.path.join(results_dir, f"mlp_scores_{fname}.png"),
-            f"Score Distribution (MLP) - {fname}"
-        )
+        # Check if results already exist
+        if os.path.exists(auroc_file_mlp):
+            with open(auroc_file_mlp, 'r') as f:
+                auroc_data = json.load(f)
+                auroc_mlp = auroc_data.get('auroc')
+            print(f"  ✓ Results already exist (AUROC: {auroc_mlp:.4f})")
+            print(f"  Skipping training (delete {auroc_file_mlp} to rerun)")
+        else:
+            auroc_mlp, clf_mlp, y_pred_proba_mlp, fpr_mlp, tpr_mlp = train_mlp_probe(
+                X_train, y_train, X_test, y_test,
+                hidden_layer_sizes=config.MLP_HIDDEN_LAYER_SIZES,  # Single hidden layer with 12k units + skip connections
+                max_iter=config.PROBE_MAX_ITER,
+                random_state=config.PROBE_RANDOM_STATE
+            )
+            print(f"  AUROC: {auroc_mlp:.4f}")
+
+            # Save AUROC
+            with open(auroc_file_mlp, 'w') as f:
+                json.dump({'auroc': float(auroc_mlp), 'fname': fname, 'classifier': 'mlp'}, f, indent=2)
+
+            # Visualizations
+            plot_roc_curve(
+                fpr_mlp, tpr_mlp, auroc_mlp,
+                os.path.join(results_dir, f"mlp_roc_{fname}.png"),
+                f"ROC Curve (MLP) - {fname}"
+            )
+            
+            # For MLP, use predict_proba scores since it doesn't have decision_function
+            # Convert probabilities to decision scores: log-odds
+            mlp_scores = np.log(y_pred_proba_mlp / (1 - y_pred_proba_mlp + 1e-10))
+            plot_score_distribution(
+                mlp_scores, y_test,
+                os.path.join(results_dir, f"mlp_scores_{fname}.png"),
+                f"Score Distribution (MLP) - {fname}"
+            )
 
     # Experiment 3: PCA Visualization
     if "pca" in experiments or experiments == "all":
