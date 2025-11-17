@@ -53,7 +53,7 @@ htmlcov/
 experiments/*/generations/
 experiments/*/cached_activations/
 experiments/*/old*/
-experiments/*/results/*/*.png
+experiments/*/results/
 mmlu_data/
 *.npy
 
