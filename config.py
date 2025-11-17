@@ -13,9 +13,9 @@ MODEL_SHORT_NAME = "gemma-3-12b"  # Used for directory/file names
 VLLM_BASE_PORT = 8100
 VLLM_MAX_MODEL_LEN = 2000
 VLLM_GPU_MEMORY_UTILIZATION = 0.9
-VLLM_NUM_SERVERS = 1
-VLLM_GPUS = [0]  # GPUs for VLLM servers (e.g., [0,1,2,3] or list(range(4)))
-ACTIVATION_GPUS = list(range(1, 4))  # GPUs for activation extraction (should not overlap with VLLM_GPUS)
+VLLM_GPUS = [0, 1, 2]  # GPUs for VLLM servers (e.g., [0,1,2,3] or list(range(4)))
+VLLM_NUM_SERVERS = len(VLLM_GPUS)
+ACTIVATION_GPUS = [3, 4, 5, 6, 7]  # GPUs for activation extraction (should not overlap with VLLM_GPUS)
 
 # Directory structure (model-specific)
 BASE_DIR = "experiments"

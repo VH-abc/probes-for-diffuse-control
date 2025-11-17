@@ -1,0 +1,783 @@
+{
+  "layer": 30,
+  "position": "letter",
+  "num_examples": 2000,
+  "filter_reliable": true,
+  "prompt_name": "lie_detector",
+  "num_configs_tested": 39,
+  "best_config": {
+    "auroc": 0.8548108026781013,
+    "train_time": 11.594054222106934,
+    "config": {
+      "hidden_layer_sizes": [
+        12000,
+        6000
+      ],
+      "learning_rate": 0.001,
+      "weight_decay": 0.08,
+      "dropout": 0.1,
+      "patience": 10,
+      "max_iter": 1000,
+      "lr_scheduler": null,
+      "use_constant_residual": false
+    },
+    "sweep_name": "pyramidal_high_wd",
+    "config_number": 53,
+    "timestamp": "2025-11-17 07:45:44"
+  },
+  "all_results": [
+    {
+      "auroc": 0.5,
+      "train_time": 10.331971883773804,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.06,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "higher_wd_sweep",
+      "config_number": 40,
+      "timestamp": "2025-11-17 07:44:29"
+    },
+    {
+      "auroc": 0.840818475889566,
+      "train_time": 5.48661208152771,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.08,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "higher_wd_sweep",
+      "config_number": 41,
+      "timestamp": "2025-11-17 07:44:35"
+    },
+    {
+      "auroc": 0.5,
+      "train_time": 3.1247918605804443,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.1,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "higher_wd_sweep",
+      "config_number": 42,
+      "timestamp": "2025-11-17 07:44:38"
+    },
+    {
+      "auroc": 0.5,
+      "train_time": 4.143003702163696,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.15,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "higher_wd_sweep",
+      "config_number": 43,
+      "timestamp": "2025-11-17 07:44:42"
+    },
+    {
+      "auroc": 0.8434639785350685,
+      "train_time": 3.1273512840270996,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.2,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "higher_wd_sweep",
+      "config_number": 44,
+      "timestamp": "2025-11-17 07:44:45"
+    },
+    {
+      "auroc": 0.5321597833446174,
+      "train_time": 3.7749743461608887,
+      "config": {
+        "hidden_layer_sizes": [
+          16000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.05,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "large_arch_high_wd",
+      "config_number": 45,
+      "timestamp": "2025-11-17 07:44:49"
+    },
+    {
+      "auroc": 0.5,
+      "train_time": 5.704060792922974,
+      "config": {
+        "hidden_layer_sizes": [
+          20000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.05,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "large_arch_high_wd",
+      "config_number": 46,
+      "timestamp": "2025-11-17 07:44:55"
+    },
+    {
+      "auroc": 0.5346799067178214,
+      "train_time": 7.3117146492004395,
+      "config": {
+        "hidden_layer_sizes": [
+          24000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.05,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "large_arch_high_wd",
+      "config_number": 47,
+      "timestamp": "2025-11-17 07:45:02"
+    },
+    {
+      "auroc": 0.5,
+      "train_time": 8.364222526550293,
+      "config": {
+        "hidden_layer_sizes": [
+          32000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.05,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "large_arch_high_wd",
+      "config_number": 48,
+      "timestamp": "2025-11-17 07:45:11"
+    },
+    {
+      "auroc": 0.5,
+      "train_time": 6.241037607192993,
+      "config": {
+        "hidden_layer_sizes": [
+          8000,
+          4000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.05,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "pyramidal_high_wd",
+      "config_number": 49,
+      "timestamp": "2025-11-17 07:45:17"
+    },
+    {
+      "auroc": 0.8501466937485894,
+      "train_time": 4.052875757217407,
+      "config": {
+        "hidden_layer_sizes": [
+          8000,
+          4000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.08,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "pyramidal_high_wd",
+      "config_number": 50,
+      "timestamp": "2025-11-17 07:45:21"
+    },
+    {
+      "auroc": 0.8525288999222648,
+      "train_time": 3.3222885131835938,
+      "config": {
+        "hidden_layer_sizes": [
+          8000,
+          4000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.1,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "pyramidal_high_wd",
+      "config_number": 51,
+      "timestamp": "2025-11-17 07:45:24"
+    },
+    {
+      "auroc": 0.853582085809574,
+      "train_time": 7.858870983123779,
+      "config": {
+        "hidden_layer_sizes": [
+          12000,
+          6000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.05,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "pyramidal_high_wd",
+      "config_number": 52,
+      "timestamp": "2025-11-17 07:45:32"
+    },
+    {
+      "auroc": 0.8548108026781013,
+      "train_time": 11.594054222106934,
+      "config": {
+        "hidden_layer_sizes": [
+          12000,
+          6000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.08,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "pyramidal_high_wd",
+      "config_number": 53,
+      "timestamp": "2025-11-17 07:45:44"
+    },
+    {
+      "auroc": 0.849795631786153,
+      "train_time": 9.58631157875061,
+      "config": {
+        "hidden_layer_sizes": [
+          12000,
+          6000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.1,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "pyramidal_high_wd",
+      "config_number": 54,
+      "timestamp": "2025-11-17 07:45:53"
+    },
+    {
+      "auroc": 0.848842749316683,
+      "train_time": 6.967389822006226,
+      "config": {
+        "hidden_layer_sizes": [
+          10000,
+          5000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.05,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "pyramidal_high_wd",
+      "config_number": 55,
+      "timestamp": "2025-11-17 07:46:00"
+    },
+    {
+      "auroc": 0.8529802653025401,
+      "train_time": 7.762766361236572,
+      "config": {
+        "hidden_layer_sizes": [
+          10000,
+          5000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.08,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "pyramidal_high_wd",
+      "config_number": 56,
+      "timestamp": "2025-11-17 07:46:08"
+    },
+    {
+      "auroc": 0.5513929637152386,
+      "train_time": 10.149594068527222,
+      "config": {
+        "hidden_layer_sizes": [
+          10000,
+          5000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.1,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "pyramidal_high_wd",
+      "config_number": 57,
+      "timestamp": "2025-11-17 07:46:18"
+    },
+    {
+      "auroc": 0.8525790516311842,
+      "train_time": 9.984595775604248,
+      "config": {
+        "hidden_layer_sizes": [
+          16000,
+          8000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.05,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "pyramidal_high_wd",
+      "config_number": 58,
+      "timestamp": "2025-11-17 07:46:28"
+    },
+    {
+      "auroc": 0.8516512450161738,
+      "train_time": 12.208587884902954,
+      "config": {
+        "hidden_layer_sizes": [
+          16000,
+          8000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.08,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "pyramidal_high_wd",
+      "config_number": 59,
+      "timestamp": "2025-11-17 07:46:40"
+    },
+    {
+      "auroc": 0.8526793550490233,
+      "train_time": 9.993534803390503,
+      "config": {
+        "hidden_layer_sizes": [
+          16000,
+          8000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.1,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "pyramidal_high_wd",
+      "config_number": 60,
+      "timestamp": "2025-11-17 07:46:50"
+    },
+    {
+      "auroc": 0.5,
+      "train_time": 4.142063856124878,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.08,
+        "dropout": 0.2,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "combined_high_reg",
+      "config_number": 61,
+      "timestamp": "2025-11-17 07:46:55"
+    },
+    {
+      "auroc": 0.8391885453496827,
+      "train_time": 4.481322765350342,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.08,
+        "dropout": 0.3,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "combined_high_reg",
+      "config_number": 62,
+      "timestamp": "2025-11-17 07:46:59"
+    },
+    {
+      "auroc": 0.8474510393941673,
+      "train_time": 4.70251989364624,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.1,
+        "dropout": 0.2,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "combined_high_reg",
+      "config_number": 63,
+      "timestamp": "2025-11-17 07:47:04"
+    },
+    {
+      "auroc": 0.5,
+      "train_time": 4.363342046737671,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.1,
+        "dropout": 0.3,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "combined_high_reg",
+      "config_number": 64,
+      "timestamp": "2025-11-17 07:47:08"
+    },
+    {
+      "auroc": 0.8380225181173049,
+      "train_time": 4.473330497741699,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.15,
+        "dropout": 0.2,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "combined_high_reg",
+      "config_number": 65,
+      "timestamp": "2025-11-17 07:47:13"
+    },
+    {
+      "auroc": 0.8472629704857193,
+      "train_time": 4.4741692543029785,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.15,
+        "dropout": 0.3,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "combined_high_reg",
+      "config_number": 66,
+      "timestamp": "2025-11-17 07:47:17"
+    },
+    {
+      "auroc": 0.5,
+      "train_time": 4.699081182479858,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.04,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "finetune_wd",
+      "config_number": 67,
+      "timestamp": "2025-11-17 07:47:22"
+    },
+    {
+      "auroc": 0.8405927931994281,
+      "train_time": 7.296586275100708,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.045,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "finetune_wd",
+      "config_number": 68,
+      "timestamp": "2025-11-17 07:47:29"
+    },
+    {
+      "auroc": 0.5,
+      "train_time": 3.804884672164917,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.055,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "finetune_wd",
+      "config_number": 69,
+      "timestamp": "2025-11-17 07:47:33"
+    },
+    {
+      "auroc": 0.5,
+      "train_time": 5.715788841247559,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.06,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "finetune_wd",
+      "config_number": 70,
+      "timestamp": "2025-11-17 07:47:39"
+    },
+    {
+      "auroc": 0.8473632739035584,
+      "train_time": 3.68831205368042,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.065,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "finetune_wd",
+      "config_number": 71,
+      "timestamp": "2025-11-17 07:47:42"
+    },
+    {
+      "auroc": 0.8498207076406128,
+      "train_time": 3.464235305786133,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.001,
+        "weight_decay": 0.07,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "finetune_wd",
+      "config_number": 72,
+      "timestamp": "2025-11-17 07:47:46"
+    },
+    {
+      "auroc": 0.8082700168008224,
+      "train_time": 11.68272590637207,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.0005,
+        "weight_decay": 0.05,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "low_lr_high_wd",
+      "config_number": 73,
+      "timestamp": "2025-11-17 07:47:58"
+    },
+    {
+      "auroc": 0.8307630582512099,
+      "train_time": 2.8975958824157715,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.0005,
+        "weight_decay": 0.08,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "low_lr_high_wd",
+      "config_number": 74,
+      "timestamp": "2025-11-17 07:48:00"
+    },
+    {
+      "auroc": 0.822350109079967,
+      "train_time": 11.676668882369995,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.0005,
+        "weight_decay": 0.1,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "low_lr_high_wd",
+      "config_number": 75,
+      "timestamp": "2025-11-17 07:48:12"
+    },
+    {
+      "auroc": 0.8390380902229244,
+      "train_time": 8.088961839675903,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.00075,
+        "weight_decay": 0.05,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "low_lr_high_wd",
+      "config_number": 76,
+      "timestamp": "2025-11-17 07:48:20"
+    },
+    {
+      "auroc": 0.5105820105820106,
+      "train_time": 3.5855860710144043,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.00075,
+        "weight_decay": 0.08,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "low_lr_high_wd",
+      "config_number": 77,
+      "timestamp": "2025-11-17 07:48:24"
+    },
+    {
+      "auroc": 0.47842222723739314,
+      "train_time": 7.974008560180664,
+      "config": {
+        "hidden_layer_sizes": [
+          12000
+        ],
+        "learning_rate": 0.00075,
+        "weight_decay": 0.1,
+        "dropout": 0.1,
+        "patience": 10,
+        "max_iter": 1000,
+        "lr_scheduler": null,
+        "use_constant_residual": false
+      },
+      "sweep_name": "low_lr_high_wd",
+      "config_number": 78,
+      "timestamp": "2025-11-17 07:48:32"
+    }
+  ]
+}

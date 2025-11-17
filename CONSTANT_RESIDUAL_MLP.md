@@ -364,3 +364,4 @@ class ConstantResidualMLP(nn.Module):
 
 Now included in hyperparameter search with 7 specialized configurations to help find if this architecture performs better than standard residual connections!
 
+
