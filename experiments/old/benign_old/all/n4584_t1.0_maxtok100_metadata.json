@@ -1,0 +1,13 @@
+{
+  "model_name": "google/gemma-3-12b-it",
+  "model_short_name": "gemma-3-12b",
+  "prompt_name": "benign",
+  "subject_type": "all",
+  "max_new_tokens": 100,
+  "temperature": 1.0,
+  "num_samples": 4584,
+  "num_servers": 3,
+  "chunk_size": 100,
+  "num_chunks": 46,
+  "timestamp": "2025-11-18 22:19:22"
+}

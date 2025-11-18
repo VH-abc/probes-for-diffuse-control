@@ -22,7 +22,7 @@ import config
 
 print(f"done importing in activations.py ({time.time() - start_time:.2f}s)")
 
-TokenPosition = Literal["last", "first", "middle", "all", "all_appended", "letter", "letter+1", "yes-no"]
+TokenPosition = Literal["last", "first", "middle", "all", "all_appended", "letter", "letter+1", "letter-1", "yes_no", "yes_no-1"]
 
 ENSURE_MODEL_CACHED = False
 
@@ -230,8 +230,8 @@ def extract_all_layers_all_positions_single_gpu(
         
         if "letter" in positions_to_extract and completions is None:
             raise ValueError("completions must be provided when extracting 'letter' position")
-        if "yes-no" in positions_to_extract and completions is None:
-            raise ValueError("completions must be provided when extracting 'yes-no' position")
+        if "yes_no" in positions_to_extract and completions is None:
+            raise ValueError("completions must be provided when extracting 'yes_no' position")
         
         print(f"[GPU {gpu_id}] Extracting activations (batch_size={batch_size})...")
         
@@ -259,7 +259,7 @@ def extract_all_layers_all_positions_single_gpu(
                     # For each position, find the token index(es) to extract
                     position_to_token_indices = {}
                     for position in positions_to_extract:
-                        if position in ["letter", "letter+1"]:
+                        if position in ["letter", "letter+1", "letter-1"]:
                             completion = completions[text_idx] if completions else ""
                             letter_pos = find_letter_token_position(
                                 full_text, completion, tokenizer, input_ids
@@ -267,6 +267,8 @@ def extract_all_layers_all_positions_single_gpu(
                             if letter_pos is not None:
                                 if position == "letter+1":
                                     letter_pos += 1
+                                elif position == "letter-1":
+                                    letter_pos -= 1
                                 probed_token_str = tokenizer.decode([input_ids[letter_pos]], skip_special_tokens=False)
                                 position_to_token_indices[position] = [letter_pos]
                                 if text_idx < len(full_texts):  # Only record once
@@ -282,12 +284,14 @@ def extract_all_layers_all_positions_single_gpu(
                                     probed_tokens_by_position[position].append(
                                         tokenizer.decode([input_ids[fallback_positions[0]]], skip_special_tokens=False)
                                     )
-                        elif position == "yes-no":
+                        elif position in ["yes_no", "yes_no-1"]:
                             completion = completions[text_idx] if completions else ""
                             yes_no_pos = find_yes_no_token_position(
                                 full_text, completion, tokenizer, input_ids
                             )
                             if yes_no_pos is not None:
+                                if position == "yes_no-1":
+                                    yes_no_pos -= 1
                                 probed_token_str = tokenizer.decode([input_ids[yes_no_pos]], skip_special_tokens=False)
                                 position_to_token_indices[position] = [yes_no_pos]
                                 if text_idx < len(full_texts):  # Only record once
@@ -296,7 +300,7 @@ def extract_all_layers_all_positions_single_gpu(
                             else:
                                 # Fallback to last
                                 if config.VERBOSITY >= 2:
-                                    print(f"Warning: No yes-no token found for {full_text}, falling back to last token")
+                                    print(f"Warning: No yes_no token found for {full_text}, falling back to last token")
                                 fallback_positions = get_probe_positions(input_ids, special_token_ids, "last")
                                 position_to_token_indices[position] = fallback_positions
                                 if len(probed_tokens_by_position[position]) == text_idx:

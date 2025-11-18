@@ -14,15 +14,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from prompts import get_prompt
 
 
-def load_reliable_questions(reliable_questions_file: str) -> Optional[List[int]]:
+def load_reliable_questions(reliable_questions_file: str) -> Optional[List[Dict]]:
     """
-    Load list of reliable question indices from cache.
+    Load list of reliable questions from cache.
     
     Args:
         reliable_questions_file: Path to reliable questions JSON file
         
     Returns:
-        List of reliable question indices, or None if file doesn't exist
+        List of reliable question dictionaries, or None if file doesn't exist
     """
     if not os.path.exists(reliable_questions_file):
         print(f"⚠️  Reliable questions file not found: {reliable_questions_file}")
@@ -32,12 +32,13 @@ def load_reliable_questions(reliable_questions_file: str) -> Optional[List[int]]
     with open(reliable_questions_file, 'r') as f:
         data = json.load(f)
     
-    reliable_indices = data.get('reliable_indices', [])
-    print(f"✓ Loaded {len(reliable_indices)} reliable question indices")
+    reliable_questions = data.get('reliable_questions', [])
+    
+    print(f"✓ Loaded {len(reliable_questions)} reliable questions directly")
     print(f"  Reliability rate: {data.get('reliability_rate', 0) * 100:.1f}%")
     print(f"  From file: {reliable_questions_file}")
     
-    return reliable_indices
+    return reliable_questions
 
 
 def load_mmlu_data(
@@ -77,15 +78,14 @@ def load_mmlu_data(
         if reliable_questions_file is None:
             raise ValueError("reliable_questions_file must be provided when filter_reliable=True")
         
-        reliable_indices = load_reliable_questions(reliable_questions_file)
-        if reliable_indices is None:
+        reliable_questions = load_reliable_questions(reliable_questions_file)
+        if reliable_questions is None:
             raise ValueError(f"Could not load reliable questions from {reliable_questions_file}")
         
-        # Filter to reliable questions only
-        reliable_set = set(reliable_indices)
-        original_count = len(questions)
-        questions = [q for i, q in enumerate(questions) if i in reliable_set]
-        print(f"  Filtered from {original_count} to {len(questions)} reliable questions")
+        # Use the questions directly instead of filtering by index
+        # This avoids any issues with shuffle order or index mismatches
+        questions = reliable_questions
+        print(f"  Using {len(questions)} reliable questions directly (no index filtering needed)")
     
     # Shuffle if requested
     if shuffle:
