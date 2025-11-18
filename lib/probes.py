@@ -27,7 +27,7 @@ def train_linear_probe(
     tol: float = None,
     n_jobs: int = None,
     verbose: bool = None,
-    use_pytorch: bool = None
+    mode: str = None
 ) -> Tuple[float, "LogisticRegression", np.ndarray, np.ndarray, np.ndarray]:
     """
     Train a logistic regression probe and compute AUROC.
@@ -44,7 +44,8 @@ def train_linear_probe(
         tol: Convergence tolerance. If None, uses config.PROBE_TOL
         n_jobs: Number of CPU cores (-1 for all). If None, uses config.PROBE_N_JOBS
         verbose: Print diagnostic information. If None, uses config.PROBE_VERBOSE
-        use_pytorch: Use PyTorch-based linear probe instead of sklearn. If None, uses config.USE_PYTORCH_LINEAR_PROBE
+        mode: Linear probe mode ("sklearn", "pytorch", "closed_form"). 
+              If None, uses config.LINEAR_PROBE_MODE
 
     Returns:
         auroc: AUROC score
@@ -55,12 +56,34 @@ def train_linear_probe(
     """
     import config
     
-    # Check if we should use PyTorch
-    if use_pytorch is None:
-        use_pytorch = getattr(config, 'USE_PYTORCH_LINEAR_PROBE', False)
+    # Determine which mode to use
+    if mode is None:
+        mode = getattr(config, 'LINEAR_PROBE_MODE', 'sklearn')
     
-    if use_pytorch:
-        # Use MLP classifier with empty hidden layers for linear model
+    # Closed-form ridge regression (fastest)
+    if mode == "closed_form":
+        from sklearn.metrics import roc_curve, auc
+        
+        print(f"  Training Closed-Form Ridge Probe...")
+        
+        clf = ClosedFormRidgeClassifier(
+            alpha=getattr(config, 'RIDGE_ALPHA', 1e-4),
+            use_dual=getattr(config, 'RIDGE_USE_DUAL', 'auto'),
+            dual_threshold=getattr(config, 'RIDGE_DUAL_THRESHOLD', 0.5),
+            random_state=random_state,
+            batch_size=getattr(config, 'LINEAR_PROBE_BATCH_SIZE', 1024)
+        )
+        
+        clf.fit(X_train, y_train)
+        
+        y_pred_proba = clf.predict_proba(X_test)[:, 1]
+        fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
+        auroc = auc(fpr, tpr)
+        
+        return auroc, clf, y_pred_proba, fpr, tpr
+    
+    # PyTorch-based linear probe
+    elif mode == "pytorch":
         from sklearn.metrics import roc_curve, auc
         
         print(f"  Training PyTorch Linear Probe...")
@@ -100,6 +123,8 @@ def train_linear_probe(
         auroc = auc(fpr, tpr)
         
         return auroc, clf, y_pred_proba, fpr, tpr
+    
+    # sklearn LogisticRegression (default)
     else:
         # Use sklearn LogisticRegression (existing implementation)
         # Lazy import (only load sklearn when actually training probes)
@@ -519,6 +544,294 @@ class ResidualMLPClassifier:
         probs = np.concatenate(all_probs)
         # Return as [P(class=0), P(class=1)] for each sample
         return np.column_stack([1 - probs, probs])
+    
+    def decision_function(self, X):
+        """Return raw decision scores (logits) in batches to avoid OOM."""
+        import torch
+        
+        self.model.eval()
+        
+        # Process in batches
+        n_samples = len(X)
+        all_logits = []
+        
+        with torch.no_grad():
+            for start_idx in range(0, n_samples, self.batch_size):
+                end_idx = min(start_idx + self.batch_size, n_samples)
+                X_batch = X[start_idx:end_idx]
+                X_tensor = torch.FloatTensor(X_batch).to(self.device)
+                logits = self.model(X_tensor)
+                all_logits.append(logits.cpu().numpy().flatten())
+        
+        # Concatenate all batch results
+        return np.concatenate(all_logits)
+
+
+class ClosedFormRidgeClassifier:
+    """
+    Closed-form ridge regression classifier for binary classification.
+    
+    Solves the ridge regression problem analytically using:
+    - Primal form: w = (X^T X + λI)^(-1) X^T y
+    - Dual form: w = X^T (XX^T + λI)^(-1) y
+    
+    Benefits:
+    - Single-shot solution (no iterative training)
+    - 10-100x faster than gradient descent methods
+    - GPU acceleration for matrix operations
+    - Automatic selection of primal vs dual form
+    
+    The classifier fits on binary labels (0/1) and outputs probabilities
+    using sigmoid activation.
+    """
+    
+    def __init__(
+        self,
+        alpha=1e-4,
+        use_dual="auto",
+        dual_threshold=0.5,
+        random_state=42,
+        batch_size=1024
+    ):
+        """
+        Initialize the closed-form ridge classifier.
+        
+        Args:
+            alpha: Regularization strength (λ). Higher values = more regularization.
+            use_dual: "auto", "primal", or "dual"
+                     "auto" selects based on n_samples/n_features ratio and dual_threshold
+            dual_threshold: When use_dual="auto", use dual only if n_samples/n_features < threshold
+            random_state: Random seed (for consistency, though not used in training)
+            batch_size: Batch size for predictions to avoid OOM
+        """
+        self.alpha = alpha
+        self.use_dual = use_dual
+        self.dual_threshold = dual_threshold
+        self.random_state = random_state
+        self.batch_size = batch_size
+        self.weights = None
+        self.bias = None
+        self.device = None
+        
+    def fit(self, X, y):
+        """
+        Fit the ridge regression classifier using closed-form solution.
+        
+        Args:
+            X: Training data of shape (n_samples, n_features)
+            y: Binary labels of shape (n_samples,)
+        
+        Returns:
+            self
+        """
+        import torch
+        import time
+        
+        # Select GPU from ACTIVATION_GPUS if available
+        import config
+        if torch.cuda.is_available() and hasattr(config, 'ACTIVATION_GPUS') and config.ACTIVATION_GPUS:
+            gpu_id = config.ACTIVATION_GPUS[0]
+            self.device = torch.device(f'cuda:{gpu_id}')
+            print(f"    Using device: cuda:{gpu_id}")
+            print(f"    GPU: {torch.cuda.get_device_name(gpu_id)}")
+        elif torch.cuda.is_available():
+            self.device = torch.device('cuda')
+            print(f"    Using device: cuda")
+            print(f"    GPU: {torch.cuda.get_device_name(0)}")
+        else:
+            self.device = torch.device('cpu')
+            print(f"    Using device: cpu")
+        
+        n_samples, n_features = X.shape
+        print(f"    Data shape: {n_samples} samples, {n_features} features")
+        print(f"    Regularization (λ): {self.alpha}")
+        
+        # Determine which form to use
+        if self.use_dual == "auto":
+            ratio = n_samples / n_features
+            use_dual_form = ratio < self.dual_threshold
+            print(f"    Sample/feature ratio: {ratio:.3f} (threshold: {self.dual_threshold:.3f})")
+        elif self.use_dual == "dual":
+            use_dual_form = True
+        else:
+            use_dual_form = False
+        
+        form_name = "dual" if use_dual_form else "primal"
+        print(f"    Using {form_name} form: ", end="")
+        if use_dual_form:
+            print(f"w = X^T (XX^T + λI)^(-1) y")
+        else:
+            print(f"w = (X^T X + λI)^(-1) X^T y")
+        
+        start_time = time.time()
+        
+        # Convert to PyTorch tensors and move to device
+        X_tensor = torch.FloatTensor(X).to(self.device)
+        y_tensor = torch.FloatTensor(y).to(self.device)
+        
+        # Center the labels for numerical stability (subtract mean)
+        y_mean = y_tensor.mean()
+        y_centered = y_tensor - y_mean
+        
+        if use_dual_form:
+            # Dual form: w = X^T (XX^T + λI)^(-1) y
+            # Better when n_samples < n_features
+            print(f"    Computing XX^T ({n_samples}x{n_samples})...")
+            
+            # Compute kernel matrix K = XX^T
+            K = torch.mm(X_tensor, X_tensor.t())
+            
+            # Add regularization: K + λI
+            K.add_(torch.eye(n_samples, device=self.device) * self.alpha)
+            
+            # Try Cholesky first (fastest), fall back to LU if not positive-definite
+            try:
+                print(f"    Solving linear system using Cholesky decomposition...")
+                L = torch.linalg.cholesky(K)
+                alpha = torch.cholesky_solve(y_centered.unsqueeze(1), L).squeeze()
+                print(f"    ✓ Cholesky succeeded")
+            except torch._C._LinAlgError as e:
+                print(f"    ⚠️  Cholesky failed: {e}")
+                print(f"    Falling back to LU decomposition...")
+                # Check condition number for diagnostics
+                try:
+                    cond_num = torch.linalg.cond(K).item()
+                    print(f"    Matrix condition number: {cond_num:.2e}")
+                except:
+                    pass
+                alpha = torch.linalg.solve(K, y_centered.unsqueeze(1)).squeeze()
+                print(f"    ✓ LU decomposition succeeded")
+            
+            # Compute weights: w = X^T α
+            self.weights = torch.mv(X_tensor.t(), alpha)
+            
+        else:
+            # Primal form: w = (X^T X + λI)^(-1) X^T y
+            # Better when n_features < n_samples
+            print(f"    Computing X^T X ({n_features}x{n_features})...")
+            
+            # Compute Gram matrix G = X^T X
+            G = torch.mm(X_tensor.t(), X_tensor)
+            
+            # Add regularization: G + λI
+            G.add_(torch.eye(n_features, device=self.device) * self.alpha)
+            
+            # Compute X^T y
+            Xy = torch.mv(X_tensor.t(), y_centered)
+            
+            # Try Cholesky first (fastest), fall back to LU if not positive-definite
+            try:
+                print(f"    Solving linear system using Cholesky decomposition...")
+                L = torch.linalg.cholesky(G)
+                self.weights = torch.cholesky_solve(Xy.unsqueeze(1), L).squeeze()
+                print(f"    ✓ Cholesky succeeded")
+            except torch._C._LinAlgError as e:
+                print(f"    ⚠️  Cholesky failed: {e}")
+                print(f"    Falling back to LU decomposition...")
+                # Check condition number for diagnostics
+                try:
+                    cond_num = torch.linalg.cond(G).item()
+                    print(f"    Matrix condition number: {cond_num:.2e}")
+                except:
+                    pass
+                self.weights = torch.linalg.solve(G, Xy.unsqueeze(1)).squeeze()
+                print(f"    ✓ LU decomposition succeeded")
+        
+        # Compute bias from centered labels
+        # bias = y_mean - mean(X @ w)
+        predictions = torch.mv(X_tensor, self.weights)
+        self.bias = y_mean - predictions.mean()
+        
+        elapsed = time.time() - start_time
+        print(f"    Training completed in {elapsed:.3f}s")
+        
+        # Diagnostic checks
+        weight_norm = torch.norm(self.weights).item()
+        bias_val = self.bias.item()
+        has_nan = torch.isnan(self.weights).any().item() or torch.isnan(self.bias).any().item()
+        has_inf = torch.isinf(self.weights).any().item() or torch.isinf(self.bias).any().item()
+        
+        print(f"    Weight norm: {weight_norm:.4f}")
+        print(f"    Bias: {bias_val:.4f}")
+        
+        if has_nan:
+            print(f"    ⚠️  WARNING: NaN detected in weights or bias!")
+        if has_inf:
+            print(f"    ⚠️  WARNING: Inf detected in weights or bias!")
+        if weight_norm > 1000:
+            print(f"    ⚠️  WARNING: Very large weight norm!")
+        if abs(bias_val) > 100:
+            print(f"    ⚠️  WARNING: Very large bias!")
+        
+        # Check training predictions
+        with torch.no_grad():
+            train_preds = torch.mv(X_tensor, self.weights) + self.bias
+            train_probs = torch.sigmoid(train_preds)
+            print(f"    Train predictions - min: {train_probs.min().item():.4f}, max: {train_probs.max().item():.4f}, mean: {train_probs.mean().item():.4f}")
+        
+        return self
+    
+    def decision_function(self, X):
+        """
+        Compute decision function (logits) for samples X.
+        
+        Args:
+            X: Data of shape (n_samples, n_features)
+        
+        Returns:
+            Decision scores of shape (n_samples,)
+        """
+        import torch
+        
+        if self.weights is None:
+            raise ValueError("Model not fitted yet. Call fit() first.")
+        
+        n_samples = len(X)
+        all_scores = []
+        
+        # Process in batches to avoid OOM
+        for start_idx in range(0, n_samples, self.batch_size):
+            end_idx = min(start_idx + self.batch_size, n_samples)
+            X_batch = X[start_idx:end_idx]
+            X_tensor = torch.FloatTensor(X_batch).to(self.device)
+            
+            # Compute X @ w + bias
+            scores = torch.mv(X_tensor, self.weights) + self.bias
+            all_scores.append(scores.cpu().numpy())
+        
+        return np.concatenate(all_scores)
+    
+    def predict_proba(self, X):
+        """
+        Predict class probabilities for X.
+        
+        Args:
+            X: Data of shape (n_samples, n_features)
+        
+        Returns:
+            Probabilities of shape (n_samples, 2) for [P(y=0), P(y=1)]
+        """
+        # Get decision scores
+        scores = self.decision_function(X)
+        
+        # Apply sigmoid to get probabilities
+        probs = 1 / (1 + np.exp(-scores))
+        
+        # Return as [P(class=0), P(class=1)]
+        return np.column_stack([1 - probs, probs])
+    
+    def predict(self, X):
+        """
+        Predict class labels for X.
+        
+        Args:
+            X: Data of shape (n_samples, n_features)
+        
+        Returns:
+            Predicted labels of shape (n_samples,)
+        """
+        probs = self.predict_proba(X)[:, 1]
+        return (probs >= 0.5).astype(int)
 
 
 class ConstantResidualMLPClassifier:
@@ -898,6 +1211,27 @@ class ConstantResidualMLPClassifier:
         probs = np.concatenate(all_probs)
         # Return as [P(class=0), P(class=1)] for each sample
         return np.column_stack([1 - probs, probs])
+    
+    def decision_function(self, X):
+        """Return raw decision scores (logits) in batches to avoid OOM."""
+        import torch
+        
+        self.model.eval()
+        
+        # Process in batches
+        n_samples = len(X)
+        all_logits = []
+        
+        with torch.no_grad():
+            for start_idx in range(0, n_samples, self.batch_size):
+                end_idx = min(start_idx + self.batch_size, n_samples)
+                X_batch = X[start_idx:end_idx]
+                X_tensor = torch.FloatTensor(X_batch).to(self.device)
+                logits = self.model(X_tensor)
+                all_logits.append(logits.cpu().numpy().flatten())
+        
+        # Concatenate all batch results
+        return np.concatenate(all_logits)
 
 
 def train_mlp_probe(
@@ -1139,6 +1473,7 @@ def measure_auroc_vs_training_size(
         top = int(len(activations)*0.9)
         if top < 2**config.MAX_HIGH:
             n_values.append(top)
+        n_values += [3000, 3800, 3900, 4000, 5000, 6000]
         n_values = list(set(n_values))
         n_values.sort()
 

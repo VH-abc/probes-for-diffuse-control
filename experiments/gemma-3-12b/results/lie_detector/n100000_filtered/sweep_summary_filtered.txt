@@ -7,11 +7,11 @@ Examples: 100000
 
 Layer      Position        Linear AUROC    MLP AUROC      
 ------------------------------------------------------------
-30         letter          0.8506          0.7925         
+30         letter          0.6949          0.7906         
 
 ------------------------------------------------------------
-🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8506)
-🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7925)
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.6949)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7906)
 
 SWEEP SUMMARY
 Model: gemma-3-12b
@@ -22,11 +22,11 @@ Examples: 100000
 
 Layer      Position        Linear AUROC    MLP AUROC      
 ------------------------------------------------------------
-30         letter          0.8506          0.7925         
+30         letter          0.6949          0.7906         
 
 ------------------------------------------------------------
-🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8506)
-🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7925)
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.6949)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7906)
 
 SWEEP SUMMARY
 Model: gemma-3-12b
@@ -37,11 +37,11 @@ Examples: 100000
 
 Layer      Position        Linear AUROC    MLP AUROC      
 ------------------------------------------------------------
-30         letter          0.8506          0.7925         
+30         letter          0.6949          0.7906         
 
 ------------------------------------------------------------
-🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8506)
-🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7925)
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.6949)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7906)
 
 SWEEP SUMMARY
 Model: gemma-3-12b
@@ -52,11 +52,11 @@ Examples: 100000
 
 Layer      Position        Linear AUROC    MLP AUROC      
 ------------------------------------------------------------
-30         letter          0.8506          0.7925         
+30         letter          0.6949          0.7906         
 
 ------------------------------------------------------------
-🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8506)
-🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7925)
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.6949)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7906)
 
 SWEEP SUMMARY
 Model: gemma-3-12b
@@ -67,11 +67,11 @@ Examples: 100000
 
 Layer      Position        Linear AUROC    MLP AUROC      
 ------------------------------------------------------------
-30         letter          0.8506          0.7925         
+30         letter          0.6949          0.7906         
 
 ------------------------------------------------------------
-🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8506)
-🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7925)
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.6949)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7906)
 
 SWEEP SUMMARY
 Model: gemma-3-12b
@@ -82,11 +82,11 @@ Examples: 100000
 
 Layer      Position        Linear AUROC    MLP AUROC      
 ------------------------------------------------------------
-30         letter          0.8506          0.7925         
+30         letter          0.6949          0.7906         
 
 ------------------------------------------------------------
-🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8506)
-🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7925)
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.6949)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7906)
 
 SWEEP SUMMARY
 Model: gemma-3-12b
@@ -97,9 +97,114 @@ Examples: 100000
 
 Layer      Position        Linear AUROC    MLP AUROC      
 ------------------------------------------------------------
-30         letter          0.8506          0.7925         
+30         letter          0.6949          0.7906         
 
 ------------------------------------------------------------
-🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8506)
-🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7925)
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.6949)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7906)
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 100000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          0.6949          0.7906         
+
+------------------------------------------------------------
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.6949)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7906)
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 100000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          0.6949          0.7906         
+
+------------------------------------------------------------
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.6949)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7906)
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 100000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          0.6949          0.7906         
+
+------------------------------------------------------------
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.6949)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7906)
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 100000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          0.6949          0.7906         
+
+------------------------------------------------------------
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.6949)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7906)
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 100000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          0.6949          0.7906         
+
+------------------------------------------------------------
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.6949)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7906)
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 100000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          0.6949          0.7906         
+
+------------------------------------------------------------
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.6949)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7906)
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 100000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          0.6949          0.7906         
+
+------------------------------------------------------------
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.6949)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.7906)
 
