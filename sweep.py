@@ -91,7 +91,7 @@ def check_cache_exists(prompt_name: str, layer: int, token_position: str, num_ex
 
 def sweep(
     pairs: List[Tuple[int, str]],
-    prompt_name: str = "semimalign",
+    prompt_name: str = config.DEFAULT_PROMPT_NAME,
     num_examples: int = None,
     skip_cache: bool = False,
     skip_analysis: bool = False,
@@ -103,7 +103,7 @@ def sweep(
 
     Args:
         pairs: List of (layer, position) tuples to sweep
-        prompt_name: Name of the prompt to use (e.g., "benign", "semimalign") - defaults to "semimalign"
+        prompt_name: Name of the prompt to use (e.g., "benign", "semimalign")
         num_examples: Number of examples
         skip_cache: Skip activation caching (use existing)
         skip_analysis: Skip probe analysis
@@ -230,7 +230,7 @@ def sweep(
 
 
 def sweep_layers(
-    prompt_name: str = "semimalign",
+    prompt_name: str = config.DEFAULT_PROMPT_NAME,
     layers: List[int] = None,
     token_position: str = config.DEFAULT_TOKEN_POSITION,
     num_examples: int = None,
@@ -243,7 +243,7 @@ def sweep_layers(
     Sweep across multiple layers (convenience wrapper).
 
     Args:
-        prompt_name: Name of the prompt to use (e.g., "benign", "semimalign") - defaults to "semimalign"
+        prompt_name: Name of the prompt to use (e.g., "benign", "semimalign")
         layers: List of layer indices to sweep
         token_position: Token position to use
         num_examples: Number of examples
@@ -265,7 +265,7 @@ def sweep_layers(
 
 
 def sweep_positions(
-    prompt_name: str = "semimalign",
+    prompt_name: str = config.DEFAULT_PROMPT_NAME,
     positions: List[str] = None,
     layer: int = None,
     num_examples: int = None,
@@ -278,7 +278,7 @@ def sweep_positions(
     Sweep across multiple token positions (convenience wrapper).
 
     Args:
-        prompt_name: Name of the prompt to use (e.g., "benign", "semimalign") - defaults to "semimalign"
+        prompt_name: Name of the prompt to use (e.g., "benign", "semimalign")
         positions: List of token positions to sweep
         layer: Layer to use
         num_examples: Number of examples
@@ -470,8 +470,8 @@ Examples:
                         help=f"Position for layer sweep (default: {config.DEFAULT_TOKEN_POSITION})")
     
     # Common parameters
-    parser.add_argument("--prompt", type=str, default="semimalign",
-                        help="Prompt name to use (e.g., 'benign', 'semimalign') (default: semimalign)")
+    parser.add_argument("--prompt", type=str, default=config.DEFAULT_PROMPT_NAME,
+                        help=f"Prompt name to use (e.g., 'benign', 'semimalign') (default: {config.DEFAULT_PROMPT_NAME})")
     parser.add_argument("--num-examples", type=int, help=f"Number of examples (default: {config.DEFAULT_NUM_EXAMPLES})")
     parser.add_argument("--skip-cache", action="store_true", help="Skip caching (use existing)")
     parser.add_argument("--skip-analysis", action="store_true", help="Skip analysis (only cache)")

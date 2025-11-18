@@ -1,15 +1,15 @@
 SWEEP SUMMARY
 Model: gemma-3-12b
-Prompt: lie_detector
+Prompt: semimalign
 Filtered: True
-Examples: 2000
+Examples: 1000
 ================================================================================
 
 Layer      Position        Linear AUROC    MLP AUROC      
 ------------------------------------------------------------
-30         letter          0.8029          0.8563         
+30         letter          0.8141          0.8348         
 
 ------------------------------------------------------------
-🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8029)
-🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.8563)
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8141)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.8348)
 

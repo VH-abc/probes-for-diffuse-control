@@ -325,7 +325,7 @@ def run_probe_analysis(
         results_linear = measure_auroc_vs_training_size(
             activations, labels,
             n_values=None,
-            n_trials=10,
+            n_trials=config.LINEAR_AUROC_VS_N_NUM_TRIALS,
             max_iter=config.PROBE_MAX_ITER,
             random_state=config.PROBE_RANDOM_STATE
         )
@@ -350,7 +350,7 @@ def run_probe_analysis(
         results_mlp = measure_auroc_vs_training_size_mlp(
             activations, labels,
             n_values=None,
-            n_trials=10,
+            n_trials=config.MLP_AUROC_VS_N_NUM_TRIALS,
             hidden_layer_sizes=config.MLP_HIDDEN_LAYER_SIZES,
             max_iter=config.PROBE_MAX_ITER,
             learning_rate=config.MLP_LEARNING_RATE,

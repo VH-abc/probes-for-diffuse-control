@@ -53,12 +53,15 @@ MAX_NEW_TOKENS = 100 #100 #900 #100
 TEMPERATURE = 1.0  # Sampling temperature
 
 # Experiment parameters
+LINEAR_AUROC_VS_N_NUM_TRIALS = 10
+MLP_AUROC_VS_N_NUM_TRIALS = 3
 RELIABLE_QUESTIONS_NUM_TRIALS = 3
 DEFAULT_NUM_EXAMPLES = 100000
 DEFAULT_LAYER = 30
 DEFAULT_TOKEN_POSITION = "letter"
 # Available experiments: ["linear_probe", "mlp_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep", "auroc_vs_n_mlp"]
 DEFAULT_EXPERIMENTS = "all" #["linear_probe", "mlp_probe"] #["linear_probe", "mlp_probe", "pca", "anomaly_detection", "auroc_vs_n", "auroc_vs_n_mlp", "corruption_sweep"]
+DEFAULT_PROMPT_NAME = "lie_detector"
 
 # Positions to cache in unified cache (excludes "all" and "all_appended" which can be computed from others)
 # CACHED_POSITIONS = [DEFAULT_TOKEN_POSITION] #["last", "first", "middle", "letter"]
@@ -89,8 +92,8 @@ MLP_LR_SCHEDULER = None
 MLP_USE_CONSTANT_RESIDUAL = False
 
 # Multiprocessing parameters
-MAX_CONCURRENT_REQUESTS_PER_SERVER = 1000  # For VLLM API calls
-ACTIVATION_BATCH_SIZE = 1000 # Batch size for activation extraction (reduce if OOM)
+MAX_CONCURRENT_REQUESTS_PER_SERVER = 100  # For VLLM API calls
+ACTIVATION_BATCH_SIZE = 100 # Batch size for activation extraction (reduce if OOM)
 
 # Visualization parameters
 N_ANNOTATE = 30

@@ -43,7 +43,7 @@ def load_reliable_questions(reliable_questions_file: str) -> Optional[List[int]]
 def load_mmlu_data(
     mmlu_file: str,
     num_examples: Optional[int],
-    prompt_name: str,
+    prompt_name,
     shuffle: bool = True,
     seed: int = 42,
     filter_reliable: bool = False,
@@ -97,7 +97,10 @@ def load_mmlu_data(
         questions = questions[:num_examples]
 
     # Format questions with the prompt
-    formatted_prompts = [format_mmlu_question(q, prompt_name) for q in questions]
+    if prompt_name is not None:
+        formatted_prompts = [format_mmlu_question(q, prompt_name) for q in questions]
+    else:
+        formatted_prompts = None
 
     return questions, formatted_prompts
 

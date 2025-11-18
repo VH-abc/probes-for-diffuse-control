@@ -20,6 +20,7 @@ import os
 import json
 import argparse
 import multiprocessing as mp
+from types import NoneType
 import numpy as np
 
 import config
@@ -109,7 +110,7 @@ def cache_lie_detector_activations(
     print(f"\nLoading {num_examples} MMLU examples from {mmlu_file}...")
     questions, _ = load_mmlu_data(
         mmlu_file, num_examples, 
-        prompt_name="benign",  # Temporary, we'll reformat
+        prompt_name=None,
         filter_reliable=filter_reliable,
         reliable_questions_file=reliable_questions_file
     )
