@@ -14,6 +14,8 @@ import numpy as np
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+import config
+
 # if TYPE_CHECKING:
 #     import torch
 #     from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
@@ -272,7 +274,8 @@ def extract_all_layers_all_positions_single_gpu(
                                         probed_tokens_by_position[position].append(probed_token_str)
                             else:
                                 # Fallback to last
-                                print(f"Warning: No letter token found for {full_text}, falling back to last token")
+                                if config.VERBOSITY >= 2:
+                                    print(f"Warning: No letter token found for {full_text}, falling back to last token")
                                 fallback_positions = get_probe_positions(input_ids, special_token_ids, "last")
                                 position_to_token_indices[position] = fallback_positions
                                 if len(probed_tokens_by_position[position]) == text_idx:
@@ -292,7 +295,8 @@ def extract_all_layers_all_positions_single_gpu(
                                         probed_tokens_by_position[position].append(probed_token_str)
                             else:
                                 # Fallback to last
-                                print(f"Warning: No yes-no token found for text, falling back to last token")
+                                if config.VERBOSITY >= 2:
+                                    print(f"Warning: No yes-no token found for {full_text}, falling back to last token")
                                 fallback_positions = get_probe_positions(input_ids, special_token_ids, "last")
                                 position_to_token_indices[position] = fallback_positions
                                 if len(probed_tokens_by_position[position]) == text_idx:

@@ -9,6 +9,8 @@ from typing import Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from sklearn.linear_model import LogisticRegression
 
+import config
+
 # Suppress sklearn convergence warnings for cleaner output
 warnings.filterwarnings('ignore', category=UserWarning, module='sklearn')
 warnings.filterwarnings('ignore', category=RuntimeWarning)
@@ -20,7 +22,12 @@ def train_linear_probe(
     X_test: np.ndarray,
     y_test: np.ndarray,
     max_iter: int = 1000,
-    random_state: int = 42
+    random_state: int = 42,
+    solver: str = None,
+    tol: float = None,
+    n_jobs: int = None,
+    verbose: bool = None,
+    use_pytorch: bool = None
 ) -> Tuple[float, "LogisticRegression", np.ndarray, np.ndarray, np.ndarray]:
     """
     Train a logistic regression probe and compute AUROC.
@@ -32,6 +39,12 @@ def train_linear_probe(
         y_test: Test labels
         max_iter: Maximum iterations for logistic regression
         random_state: Random seed
+        solver: Solver algorithm ('saga', 'lbfgs', 'liblinear', 'newton-cg')
+                If None, uses config.PROBE_SOLVER
+        tol: Convergence tolerance. If None, uses config.PROBE_TOL
+        n_jobs: Number of CPU cores (-1 for all). If None, uses config.PROBE_N_JOBS
+        verbose: Print diagnostic information. If None, uses config.PROBE_VERBOSE
+        use_pytorch: Use PyTorch-based linear probe instead of sklearn. If None, uses config.USE_PYTORCH_LINEAR_PROBE
 
     Returns:
         auroc: AUROC score
@@ -40,18 +53,104 @@ def train_linear_probe(
         fpr: False positive rates
         tpr: True positive rates
     """
-    # Lazy import (only load sklearn when actually training probes)
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.metrics import roc_curve, auc
+    import config
     
-    clf = LogisticRegression(max_iter=max_iter, random_state=random_state)
-    clf.fit(X_train, y_train)
+    # Check if we should use PyTorch
+    if use_pytorch is None:
+        use_pytorch = getattr(config, 'USE_PYTORCH_LINEAR_PROBE', False)
+    
+    if use_pytorch:
+        # Use MLP classifier with empty hidden layers for linear model
+        from sklearn.metrics import roc_curve, auc
+        
+        print(f"  Training PyTorch Linear Probe...")
+        
+        # Determine which MLP implementation to use
+        if getattr(config, 'MLP_USE_CONSTANT_RESIDUAL', False):
+            clf = ConstantResidualMLPClassifier(
+                hidden_layer_sizes=(),  # Empty = linear model
+                max_iter=max_iter,
+                random_state=random_state,
+                learning_rate=getattr(config, 'LINEAR_PROBE_LEARNING_RATE', 0.01),
+                weight_decay=getattr(config, 'LINEAR_PROBE_WEIGHT_DECAY', 1e-4),
+                dropout=0,  # No dropout for linear
+                patience=getattr(config, 'LINEAR_PROBE_PATIENCE', 10),
+                batch_size=getattr(config, 'LINEAR_PROBE_BATCH_SIZE', 256),
+                max_steps=getattr(config, 'LINEAR_PROBE_MAX_STEPS', 3000),
+                eval_every_n_steps=getattr(config, 'LINEAR_PROBE_EVAL_EVERY_N_STEPS', 100)
+            )
+        else:
+            clf = ResidualMLPClassifier(
+                hidden_layer_sizes=(),  # Empty = linear model
+                max_iter=max_iter,
+                random_state=random_state,
+                learning_rate=getattr(config, 'LINEAR_PROBE_LEARNING_RATE', 0.01),
+                weight_decay=getattr(config, 'LINEAR_PROBE_WEIGHT_DECAY', 1e-4),
+                dropout=0,  # No dropout for linear
+                patience=getattr(config, 'LINEAR_PROBE_PATIENCE', 10),
+                batch_size=getattr(config, 'LINEAR_PROBE_BATCH_SIZE', 256),
+                max_steps=getattr(config, 'LINEAR_PROBE_MAX_STEPS', 3000),
+                eval_every_n_steps=getattr(config, 'LINEAR_PROBE_EVAL_EVERY_N_STEPS', 100)
+            )
+        
+        clf.fit(X_train, y_train)
+        
+        y_pred_proba = clf.predict_proba(X_test)[:, 1]
+        fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
+        auroc = auc(fpr, tpr)
+        
+        return auroc, clf, y_pred_proba, fpr, tpr
+    else:
+        # Use sklearn LogisticRegression (existing implementation)
+        # Lazy import (only load sklearn when actually training probes)
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.metrics import roc_curve, auc
+        import time
+        
+        # Use config defaults if not specified
+        if solver is None:
+            solver = config.PROBE_SOLVER
+        if tol is None:
+            tol = config.PROBE_TOL
+        if n_jobs is None:
+            n_jobs = config.PROBE_N_JOBS
+        if verbose is None:
+            verbose = getattr(config, 'PROBE_VERBOSE', False)
+        
+        if verbose:
+            print(f"\n  [Probe Training Diagnostics]")
+            print(f"    Dataset: {X_train.shape[0]} train samples, {X_test.shape[0]} test samples")
+            print(f"    Features: {X_train.shape[1]}")
+            print(f"    Solver: {solver}, tol: {tol}, max_iter: {max_iter}, n_jobs: {n_jobs}")
+        
+        start_time = time.time()
+        
+        clf = LogisticRegression(
+            max_iter=max_iter, 
+            random_state=random_state,
+            solver=solver,
+            tol=tol,
+            n_jobs=n_jobs
+        )
+        clf.fit(X_train, y_train)
+        
+        train_time = time.time() - start_time
 
-    y_pred_proba = clf.predict_proba(X_test)[:, 1]
-    fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
-    auroc = auc(fpr, tpr)
+        y_pred_proba = clf.predict_proba(X_test)[:, 1]
+        fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
+        auroc = auc(fpr, tpr)
+        
+        if verbose:
+            # Get number of iterations (available for most solvers)
+            n_iter = getattr(clf, 'n_iter_', ['N/A'])[0] if hasattr(clf, 'n_iter_') else 'N/A'
+            converged = n_iter < max_iter if isinstance(n_iter, int) else 'Unknown'
+            
+            print(f"    Training time: {train_time:.2f}s")
+            print(f"    Iterations: {n_iter} / {max_iter}")
+            print(f"    Converged: {converged}")
+            print(f"    AUROC: {auroc:.4f}")
 
-    return auroc, clf, y_pred_proba, fpr, tpr
+        return auroc, clf, y_pred_proba, fpr, tpr
 
 
 class ResidualMLPClassifier:
@@ -69,16 +168,22 @@ class ResidualMLPClassifier:
         weight_decay=1e-4,
         dropout=0.1,
         patience=10,
-        lr_scheduler=None
+        lr_scheduler=None,
+        batch_size=None,
+        max_steps=None,
+        eval_every_n_steps=None
     ):
         self.hidden_layer_sizes = hidden_layer_sizes if isinstance(hidden_layer_sizes, (tuple, list)) else (hidden_layer_sizes,)
         self.max_iter = max_iter
+        self.max_steps = max_steps
+        self.eval_every_n_steps = eval_every_n_steps
         self.random_state = random_state
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.dropout = dropout
         self.patience = patience
         self.lr_scheduler = lr_scheduler
+        self.batch_size = batch_size
         self.model = None
         self.input_size = None
         
@@ -92,11 +197,21 @@ class ResidualMLPClassifier:
         torch.manual_seed(self.random_state)
         np.random.seed(self.random_state)
         
-        # Detect GPU
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        print(f"    Using device: {self.device}")
-        if torch.cuda.is_available():
+        # Select GPU from ACTIVATION_GPUS if available
+        import config
+        if torch.cuda.is_available() and hasattr(config, 'ACTIVATION_GPUS') and config.ACTIVATION_GPUS:
+            # Use first available GPU from ACTIVATION_GPUS
+            gpu_id = config.ACTIVATION_GPUS[0]
+            self.device = torch.device(f'cuda:{gpu_id}')
+            print(f"    Using device: cuda:{gpu_id}")
+            print(f"    GPU: {torch.cuda.get_device_name(gpu_id)}")
+        elif torch.cuda.is_available():
+            self.device = torch.device('cuda')
+            print(f"    Using device: cuda")
             print(f"    GPU: {torch.cuda.get_device_name(0)}")
+        else:
+            self.device = torch.device('cpu')
+            print(f"    Using device: cpu")
         
         self.input_size = X.shape[1]
         
@@ -106,69 +221,96 @@ class ResidualMLPClassifier:
                 super().__init__()
                 self.hidden_layer_sizes = hidden_layer_sizes
                 
-                # Build layers
-                self.layers = nn.ModuleList()
-                self.batch_norms = nn.ModuleList()
-                self.skip_projections = nn.ModuleList()
-                
-                prev_size = input_size
-                for hidden_size in hidden_layer_sizes:
-                    # Main layer
-                    self.layers.append(nn.Linear(prev_size, hidden_size))
-                    self.batch_norms.append(nn.BatchNorm1d(hidden_size))
+                # Handle linear model (no hidden layers)
+                if len(hidden_layer_sizes) == 0:
+                    self.output_layer = nn.Linear(input_size, 1)
+                    self.is_linear = True
+                else:
+                    self.is_linear = False
                     
-                    # Skip connection projection (if dimensions differ)
-                    if prev_size != hidden_size:
-                        self.skip_projections.append(nn.Linear(prev_size, hidden_size))
-                    else:
-                        self.skip_projections.append(None)
+                    # Build layers
+                    self.layers = nn.ModuleList()
+                    self.batch_norms = nn.ModuleList()
+                    self.skip_projections = nn.ModuleList()
                     
-                    prev_size = hidden_size
-                
-                # Output layer
-                self.output_layer = nn.Linear(prev_size, 1)
-                self.relu = nn.ReLU()
-                self.dropout = nn.Dropout(dropout_rate)
+                    prev_size = input_size
+                    for hidden_size in hidden_layer_sizes:
+                        # Main layer
+                        self.layers.append(nn.Linear(prev_size, hidden_size))
+                        self.batch_norms.append(nn.BatchNorm1d(hidden_size))
+                        
+                        # Skip connection projection (if dimensions differ)
+                        if prev_size != hidden_size:
+                            self.skip_projections.append(nn.Linear(prev_size, hidden_size))
+                        else:
+                            self.skip_projections.append(None)
+                        
+                        prev_size = hidden_size
+                    
+                    # Output layer
+                    self.output_layer = nn.Linear(prev_size, 1)
+                    self.relu = nn.ReLU()
+                    self.dropout = nn.Dropout(dropout_rate)
                 
             def forward(self, x):
-                out = x
-                
-                # Process each hidden layer with skip connection
-                for i, (layer, bn, skip_proj) in enumerate(zip(self.layers, self.batch_norms, self.skip_projections)):
-                    # Store input for skip connection
-                    residual = out
+                if self.is_linear:
+                    return self.output_layer(x)
+                else:
+                    out = x
                     
-                    # Main path
-                    out = layer(out)
-                    out = bn(out)
+                    # Process each hidden layer with skip connection
+                    for i, (layer, bn, skip_proj) in enumerate(zip(self.layers, self.batch_norms, self.skip_projections)):
+                        # Store input for skip connection
+                        residual = out
+                        
+                        # Main path
+                        out = layer(out)
+                        out = bn(out)
+                        
+                        # Skip connection with projection if needed
+                        if skip_proj is not None:
+                            residual = skip_proj(residual)
+                        
+                        # Add skip connection
+                        out = out + residual
+                        
+                        # Activation and dropout
+                        out = self.relu(out)
+                        out = self.dropout(out)
                     
-                    # Skip connection with projection if needed
-                    if skip_proj is not None:
-                        residual = skip_proj(residual)
-                    
-                    # Add skip connection
-                    out = out + residual
-                    
-                    # Activation and dropout
-                    out = self.relu(out)
-                    out = self.dropout(out)
-                
-                # Output layer
-                out = self.output_layer(out)
-                return out
+                    # Output layer
+                    out = self.output_layer(out)
+                    return out
         
         self.model = ResNetMLP(self.input_size, self.hidden_layer_sizes, self.dropout).to(self.device)
+        
+        # Determine batch size, max_steps, and eval_every_n_steps from config if not provided
+        if self.batch_size is None:
+            import config
+            self.batch_size = getattr(config, 'MLP_BATCH_SIZE', 256)
+        if self.max_steps is None:
+            import config
+            self.max_steps = getattr(config, 'MLP_MAX_STEPS', 10000)
+        if self.eval_every_n_steps is None:
+            import config
+            self.eval_every_n_steps = getattr(config, 'MLP_EVAL_EVERY_N_STEPS', 100)
         
         # Print model info
         total_params = sum(p.numel() for p in self.model.parameters())
         trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        arch_str = " → ".join([f"Input({self.input_size})"] + [f"Hidden({h})" for h in self.hidden_layer_sizes] + ["Output(1)"])
+        model_type = "Linear" if len(self.hidden_layer_sizes) == 0 else "MLP"
+        if len(self.hidden_layer_sizes) == 0:
+            arch_str = f"Input({self.input_size}) → Output(1)"
+        else:
+            arch_str = " → ".join([f"Input({self.input_size})"] + [f"Hidden({h})" for h in self.hidden_layer_sizes] + ["Output(1)"])
         print(f"    Model parameters: {total_params:,} (trainable: {trainable_params:,})")
-        print(f"    Architecture: {arch_str}")
-        print(f"    Hidden layers: {len(self.hidden_layer_sizes)}, Skip connections: {len(self.hidden_layer_sizes)}")
+        print(f"    Architecture ({model_type}): {arch_str}")
+        if len(self.hidden_layer_sizes) > 0:
+            print(f"    Hidden layers: {len(self.hidden_layer_sizes)}, Skip connections: {len(self.hidden_layer_sizes)}")
         print(f"    Hyperparameters: LR={self.learning_rate}, WD={self.weight_decay}, Dropout={self.dropout}, Patience={self.patience}")
         print(f"    LR Scheduler: {self.lr_scheduler if self.lr_scheduler else 'None'}")
-        print(f"    Training samples: {len(X)}, Validation: {int(0.1 * len(X))}")
+        print(f"    Training samples: {len(X)}, Validation: {int(0.1 * len(X))}, Batch size: {self.batch_size}")
+        print(f"    Max steps: {self.max_steps}, Eval every: {self.eval_every_n_steps} steps")
         
         # Convert to PyTorch tensors and move to device
         X_tensor = torch.FloatTensor(X).to(self.device)
@@ -196,80 +338,187 @@ class ResidualMLPClassifier:
             )
         elif self.lr_scheduler == "step":
             scheduler = optim.lr_scheduler.StepLR(
-                optimizer, step_size=50, gamma=0.5
+                optimizer, step_size=500, gamma=0.5  # Adjusted for steps instead of epochs
             )
         
-        # Training loop with early stopping
+        # Step-based training loop with early stopping
         best_val_loss = float('inf')
+        ema_val_loss = None  # Exponential moving average for val loss
+        ema_train_loss = None  # Exponential moving average for train loss
+        ema_alpha = 0.3  # EMA smoothing factor (0.3 = 30% new value, 70% old value)
+        prev_ema_val_loss = None
+        prev_ema_train_loss = None
         patience_counter = 0
-        best_epoch = 0
+        best_step = 0
+        best_model_state = None
         
-        print(f"\n    Starting training (max {self.max_iter} epochs, early stopping patience={self.patience})...")
-        print(f"    {'Epoch':<8} {'Train Loss':<12} {'Val Loss':<12} {'LR':<12} {'Status':<20}")
+        n_train = len(X_train_t)
+        n_val = len(X_val_t)
+        
+        print(f"\n    Starting training (max {self.max_steps} steps, eval every {self.eval_every_n_steps} steps, patience={self.patience})...")
+        print(f"    {'Step':<8} {'Train Loss':<12} {'Val Loss':<12} {'LR':<12} {'Status':<20}")
         print(f"    {'-'*8} {'-'*12} {'-'*12} {'-'*12} {'-'*20}")
         
-        for epoch in range(self.max_iter):
-            self.model.train()
-            optimizer.zero_grad()
-            outputs = self.model(X_train_t)
-            loss = criterion(outputs, y_train_t)
-            loss.backward()
-            optimizer.step()
-            
-            train_loss = loss.item()
-            
-            # Validation every 10 epochs or last epoch
-            if epoch % 10 == 0 or epoch == self.max_iter - 1:
-                self.model.eval()
-                with torch.no_grad():
-                    val_outputs = self.model(X_val_t)
-                    val_loss = criterion(val_outputs, y_val_t).item()
-                
-                # Step scheduler if present
-                if scheduler is not None:
-                    if self.lr_scheduler == "plateau":
-                        scheduler.step(val_loss)
-                    elif self.lr_scheduler == "step":
-                        scheduler.step()
-                
-                # Get current learning rate
-                current_lr = optimizer.param_groups[0]['lr']
-                
-                # Status message
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    best_epoch = epoch
-                    patience_counter = 0
-                    status = "✓ New best!"
-                else:
-                    patience_counter += 1
-                    status = f"No improve ({patience_counter}/{self.patience})"
-                
-                print(f"    {epoch:<8} {train_loss:<12.6f} {val_loss:<12.6f} {current_lr:<12.8f} {status:<20}")
-                
-                if patience_counter >= self.patience:
-                    print(f"\n    Early stopping at epoch {epoch} (best was epoch {best_epoch})")
-                    break
-        else:
-            print(f"\n    Reached max iterations ({self.max_iter} epochs)")
+        step = 0
+        recent_train_losses = []
         
-        print(f"    Best validation loss: {best_val_loss:.6f} (epoch {best_epoch})")
+        while step < self.max_steps:
+            self.model.train()
+            
+            # Shuffle training data for this pass
+            perm = torch.randperm(n_train)
+            X_train_shuffled = X_train_t[perm]
+            y_train_shuffled = y_train_t[perm]
+            
+            # Iterate through batches
+            for batch_start in range(0, n_train, self.batch_size):
+                if step >= self.max_steps:
+                    break
+                    
+                batch_end = min(batch_start + self.batch_size, n_train)
+                X_batch = X_train_shuffled[batch_start:batch_end]
+                y_batch = y_train_shuffled[batch_start:batch_end]
+                
+                # Training step
+                optimizer.zero_grad()
+                outputs = self.model(X_batch)
+                loss = criterion(outputs, y_batch)
+                loss.backward()
+                optimizer.step()
+                
+                recent_train_losses.append(loss.item())
+                step += 1
+                
+                # Validation check
+                if step % self.eval_every_n_steps == 0 or step >= self.max_steps:
+                    # Calculate average recent train loss
+                    train_loss = sum(recent_train_losses) / len(recent_train_losses)
+                    recent_train_losses = []
+                    
+                    # Batched validation inference to avoid OOM
+                    self.model.eval()
+                    val_loss = 0.0
+                    n_val_batches = (n_val + self.batch_size - 1) // self.batch_size
+                    
+                    with torch.no_grad():
+                        for val_batch_idx in range(n_val_batches):
+                            val_start = val_batch_idx * self.batch_size
+                            val_end = min((val_batch_idx + 1) * self.batch_size, n_val)
+                            val_batch_out = self.model(X_val_t[val_start:val_end])
+                            val_batch_loss = criterion(val_batch_out, y_val_t[val_start:val_end]).item()
+                            val_loss += val_batch_loss * (val_end - val_start)
+                    
+                    val_loss = val_loss / n_val
+                    
+                    # Step scheduler if present
+                    if scheduler is not None:
+                        if self.lr_scheduler == "plateau":
+                            scheduler.step(val_loss)
+                        elif self.lr_scheduler == "step":
+                            scheduler.step()
+                    
+                    # Get current learning rate
+                    current_lr = optimizer.param_groups[0]['lr']
+                    
+                    # Update EMAs (Exponential Moving Averages) for smoothed loss tracking
+                    if ema_val_loss is None:
+                        # Initialize EMAs on first evaluation
+                        ema_val_loss = val_loss
+                        ema_train_loss = train_loss
+                        prev_ema_val_loss = val_loss
+                        prev_ema_train_loss = train_loss
+                    else:
+                        # Store previous EMAs for comparison
+                        prev_ema_val_loss = ema_val_loss
+                        prev_ema_train_loss = ema_train_loss
+                        # Update EMAs with new values
+                        ema_val_loss = ema_alpha * val_loss + (1 - ema_alpha) * ema_val_loss
+                        ema_train_loss = ema_alpha * train_loss + (1 - ema_alpha) * ema_train_loss
+                    
+                    # Early stopping logic using EMAs: increment patience only if:
+                    # - Train loss is roughly 0 (model has memorized training data)
+                    # - AND EMA val loss is consistently failing to improve
+                    min_improvement = 1e-5  # Minimum improvement to count as meaningful
+                    min_val_improvement_to_save = 1e-4  # Only save checkpoint if val loss improves by this much
+                    train_loss_threshold = 0.01  # Consider train loss "roughly 0" below this
+                    
+                    if val_loss < best_val_loss:
+                        val_improvement = best_val_loss - val_loss
+                        best_val_loss = val_loss
+                        best_step = step
+                        patience_counter = 0
+                        
+                        # Only save checkpoint if improvement is meaningful
+                        if val_improvement > min_val_improvement_to_save or best_model_state is None:
+                            status = "✓ New best!"
+                            best_model_state = {k: v.cpu().clone() for k, v in self.model.state_dict().items()}
+                        else:
+                            status = "✓ Best (no save)"
+                    elif step > self.eval_every_n_steps:  # Skip EMA checks on first eval
+                        # Only consider early stopping if train loss is near zero
+                        if ema_train_loss < train_loss_threshold:
+                            # Train loss is low - check if val loss has plateaued
+                            if ema_val_loss >= prev_ema_val_loss - min_improvement:
+                                # EMA val loss not improving
+                                patience_counter += 1
+                                status = f"Train~0, Val plateau ({patience_counter}/{self.patience})"
+                            else:
+                                # Val still improving even with low train loss
+                                status = "Train~0, Val improving"
+                        else:
+                            # Train loss still high - keep training
+                            status = f"Training (loss={ema_train_loss:.4f})"
+                    else:
+                        status = "Warming up"
+                    
+                    print(f"    {step:<8} {train_loss:<12.6f} {val_loss:<12.6f} {current_lr:<12.8f} {status:<20}")
+                    
+                    if patience_counter >= self.patience:
+                        print(f"\n    Early stopping at step {step} (best was step {best_step})")
+                        break
+                    
+                    self.model.train()  # Return to training mode
+            
+            if patience_counter >= self.patience:
+                break
+        else:
+            print(f"\n    Reached max steps ({self.max_steps})")
+        
+        print(f"    Best validation loss: {best_val_loss:.6f} (step {best_step})")
+        
+        # Restore best model weights
+        if best_model_state is not None:
+            self.model.load_state_dict({k: v.to(self.device) for k, v in best_model_state.items()})
+            print(f"    Restored model weights from step {best_step}")
+        
         print(f"    Training complete!\n")
         
         return self
     
     def predict_proba(self, X):
-        """Predict probabilities."""
+        """Predict probabilities in batches to avoid OOM."""
         import torch
         import torch.nn.functional as F
         
         self.model.eval()
+        
+        # Process in batches
+        n_samples = len(X)
+        all_probs = []
+        
         with torch.no_grad():
-            X_tensor = torch.FloatTensor(X).to(self.device)
-            logits = self.model(X_tensor)
-            probs = torch.sigmoid(logits).cpu().numpy().flatten()
-            # Return as [P(class=0), P(class=1)] for each sample
-            return np.column_stack([1 - probs, probs])
+            for start_idx in range(0, n_samples, self.batch_size):
+                end_idx = min(start_idx + self.batch_size, n_samples)
+                X_batch = X[start_idx:end_idx]
+                X_tensor = torch.FloatTensor(X_batch).to(self.device)
+                logits = self.model(X_tensor)
+                probs = torch.sigmoid(logits).cpu().numpy().flatten()
+                all_probs.append(probs)
+        
+        # Concatenate all batch results
+        probs = np.concatenate(all_probs)
+        # Return as [P(class=0), P(class=1)] for each sample
+        return np.column_stack([1 - probs, probs])
 
 
 class ConstantResidualMLPClassifier:
@@ -298,16 +547,22 @@ class ConstantResidualMLPClassifier:
         weight_decay=1e-4,
         dropout=0.1,
         patience=10,
-        lr_scheduler=None
+        lr_scheduler=None,
+        batch_size=None,
+        max_steps=None,
+        eval_every_n_steps=None
     ):
         self.hidden_layer_sizes = hidden_layer_sizes if isinstance(hidden_layer_sizes, (tuple, list)) else (hidden_layer_sizes,)
         self.max_iter = max_iter
+        self.max_steps = max_steps
+        self.eval_every_n_steps = eval_every_n_steps
         self.random_state = random_state
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.dropout = dropout
         self.patience = patience
         self.lr_scheduler = lr_scheduler
+        self.batch_size = batch_size
         self.model = None
         self.input_size = None
         
@@ -321,11 +576,21 @@ class ConstantResidualMLPClassifier:
         torch.manual_seed(self.random_state)
         np.random.seed(self.random_state)
         
-        # Detect GPU
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        print(f"    Using device: {self.device}")
-        if torch.cuda.is_available():
+        # Select GPU from ACTIVATION_GPUS if available
+        import config
+        if torch.cuda.is_available() and hasattr(config, 'ACTIVATION_GPUS') and config.ACTIVATION_GPUS:
+            # Use first available GPU from ACTIVATION_GPUS
+            gpu_id = config.ACTIVATION_GPUS[0]
+            self.device = torch.device(f'cuda:{gpu_id}')
+            print(f"    Using device: cuda:{gpu_id}")
+            print(f"    GPU: {torch.cuda.get_device_name(gpu_id)}")
+        elif torch.cuda.is_available():
+            self.device = torch.device('cuda')
+            print(f"    Using device: cuda")
             print(f"    GPU: {torch.cuda.get_device_name(0)}")
+        else:
+            self.device = torch.device('cpu')
+            print(f"    Using device: cpu")
         
         self.input_size = X.shape[1]
         
@@ -336,68 +601,95 @@ class ConstantResidualMLPClassifier:
                 self.input_size = input_size
                 self.hidden_layer_sizes = hidden_layer_sizes
                 
-                # Build bottleneck blocks (up → compute → down)
-                self.blocks = nn.ModuleList()
-                
-                for hidden_size in hidden_layer_sizes:
-                    block = nn.ModuleDict({
-                        'up': nn.Linear(input_size, hidden_size),
-                        'bn1': nn.BatchNorm1d(hidden_size),
-                        'down': nn.Linear(hidden_size, input_size),
-                        'bn2': nn.BatchNorm1d(input_size),
-                    })
-                    self.blocks.append(block)
-                
-                # Output layer (from constant residual dim)
-                self.output_layer = nn.Linear(input_size, 1)
-                self.relu = nn.ReLU()
-                self.dropout = nn.Dropout(dropout_rate)
+                # Handle linear model (no hidden layers)
+                if len(hidden_layer_sizes) == 0:
+                    self.output_layer = nn.Linear(input_size, 1)
+                    self.is_linear = True
+                else:
+                    self.is_linear = False
+                    
+                    # Build bottleneck blocks (up → compute → down)
+                    self.blocks = nn.ModuleList()
+                    
+                    for hidden_size in hidden_layer_sizes:
+                        block = nn.ModuleDict({
+                            'up': nn.Linear(input_size, hidden_size),
+                            'bn1': nn.BatchNorm1d(hidden_size),
+                            'down': nn.Linear(hidden_size, input_size),
+                            'bn2': nn.BatchNorm1d(input_size),
+                        })
+                        self.blocks.append(block)
+                    
+                    # Output layer (from constant residual dim)
+                    self.output_layer = nn.Linear(input_size, 1)
+                    self.relu = nn.ReLU()
+                    self.dropout = nn.Dropout(dropout_rate)
                 
             def forward(self, x):
-                out = x
-                
-                # Process each bottleneck block with identity skip connection
-                for block in self.blocks:
-                    residual = out  # Save for identity skip connection
+                if self.is_linear:
+                    return self.output_layer(x)
+                else:
+                    out = x
                     
-                    # Up-project to hidden size
-                    out = block['up'](out)
-                    out = block['bn1'](out)
-                    out = self.relu(out)
-                    out = self.dropout(out)
+                    # Process each bottleneck block with identity skip connection
+                    for block in self.blocks:
+                        residual = out  # Save for identity skip connection
+                        
+                        # Up-project to hidden size
+                        out = block['up'](out)
+                        out = block['bn1'](out)
+                        out = self.relu(out)
+                        out = self.dropout(out)
+                        
+                        # Down-project back to input size
+                        out = block['down'](out)
+                        out = block['bn2'](out)
+                        
+                        # Identity skip connection (no projection needed!)
+                        out = out + residual
+                        
+                        # Activation after skip connection
+                        out = self.relu(out)
+                        out = self.dropout(out)
                     
-                    # Down-project back to input size
-                    out = block['down'](out)
-                    out = block['bn2'](out)
-                    
-                    # Identity skip connection (no projection needed!)
-                    out = out + residual
-                    
-                    # Activation after skip connection
-                    out = self.relu(out)
-                    out = self.dropout(out)
-                
-                # Output layer
-                out = self.output_layer(out)
-                return out
+                    # Output layer
+                    out = self.output_layer(out)
+                    return out
         
         self.model = ConstantResidualMLP(self.input_size, self.hidden_layer_sizes, self.dropout).to(self.device)
+        
+        # Determine batch size, max_steps, and eval_every_n_steps from config if not provided
+        if self.batch_size is None:
+            import config
+            self.batch_size = getattr(config, 'MLP_BATCH_SIZE', 256)
+        if self.max_steps is None:
+            import config
+            self.max_steps = getattr(config, 'MLP_MAX_STEPS', 10000)
+        if self.eval_every_n_steps is None:
+            import config
+            self.eval_every_n_steps = getattr(config, 'MLP_EVAL_EVERY_N_STEPS', 100)
         
         # Print model info
         total_params = sum(p.numel() for p in self.model.parameters())
         trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        arch_str = " → ".join(
-            [f"Input({self.input_size})"] + 
-            [f"[↑{h}↓{self.input_size}]" for h in self.hidden_layer_sizes] + 
-            ["Output(1)"]
-        )
+        model_type = "Linear" if len(self.hidden_layer_sizes) == 0 else "Constant Residual MLP"
+        if len(self.hidden_layer_sizes) == 0:
+            arch_str = f"Input({self.input_size}) → Output(1)"
+        else:
+            arch_str = " → ".join(
+                [f"Input({self.input_size})"] + 
+                [f"[↑{h}↓{self.input_size}]" for h in self.hidden_layer_sizes] + 
+                ["Output(1)"]
+            )
         print(f"    Model parameters: {total_params:,} (trainable: {trainable_params:,})")
-        print(f"    Architecture (Constant Residual): {arch_str}")
-        print(f"    Bottleneck blocks: {len(self.hidden_layer_sizes)}, Identity skip connections: {len(self.hidden_layer_sizes)}")
-        print(f"    Residual dimension: {self.input_size} (constant)")
+        print(f"    Architecture ({model_type}): {arch_str}")
+        if len(self.hidden_layer_sizes) > 0:
+            print(f"    Bottleneck blocks: {len(self.hidden_layer_sizes)}, Identity skip connections: {len(self.hidden_layer_sizes)}")
+            print(f"    Residual dimension: {self.input_size} (constant)")
         print(f"    Hyperparameters: LR={self.learning_rate}, WD={self.weight_decay}, Dropout={self.dropout}, Patience={self.patience}")
         print(f"    LR Scheduler: {self.lr_scheduler if self.lr_scheduler else 'None'}")
-        print(f"    Training samples: {len(X)}, Validation: {int(0.1 * len(X))}")
+        print(f"    Training samples: {len(X)}, Validation: {int(0.1 * len(X))}, Batch size: {self.batch_size}")
+        print(f"    Max steps: {self.max_steps}, Eval every: {self.eval_every_n_steps} steps")
         
         # Convert to PyTorch tensors and move to device
         X_tensor = torch.FloatTensor(X).to(self.device)
@@ -425,80 +717,187 @@ class ConstantResidualMLPClassifier:
             )
         elif self.lr_scheduler == "step":
             scheduler = optim.lr_scheduler.StepLR(
-                optimizer, step_size=50, gamma=0.5
+                optimizer, step_size=500, gamma=0.5  # Adjusted for steps instead of epochs
             )
         
-        # Training loop with early stopping
+        # Step-based training loop with early stopping
         best_val_loss = float('inf')
+        ema_val_loss = None  # Exponential moving average for val loss
+        ema_train_loss = None  # Exponential moving average for train loss
+        ema_alpha = 0.3  # EMA smoothing factor (0.3 = 30% new value, 70% old value)
+        prev_ema_val_loss = None
+        prev_ema_train_loss = None
         patience_counter = 0
-        best_epoch = 0
+        best_step = 0
+        best_model_state = None
         
-        print(f"\n    Starting training (max {self.max_iter} epochs, early stopping patience={self.patience})...")
-        print(f"    {'Epoch':<8} {'Train Loss':<12} {'Val Loss':<12} {'LR':<12} {'Status':<20}")
+        n_train = len(X_train_t)
+        n_val = len(X_val_t)
+        
+        print(f"\n    Starting training (max {self.max_steps} steps, eval every {self.eval_every_n_steps} steps, patience={self.patience})...")
+        print(f"    {'Step':<8} {'Train Loss':<12} {'Val Loss':<12} {'LR':<12} {'Status':<20}")
         print(f"    {'-'*8} {'-'*12} {'-'*12} {'-'*12} {'-'*20}")
         
-        for epoch in range(self.max_iter):
-            self.model.train()
-            optimizer.zero_grad()
-            outputs = self.model(X_train_t)
-            loss = criterion(outputs, y_train_t)
-            loss.backward()
-            optimizer.step()
-            
-            train_loss = loss.item()
-            
-            # Validation every 10 epochs or last epoch
-            if epoch % 10 == 0 or epoch == self.max_iter - 1:
-                self.model.eval()
-                with torch.no_grad():
-                    val_outputs = self.model(X_val_t)
-                    val_loss = criterion(val_outputs, y_val_t).item()
-                
-                # Step scheduler if present
-                if scheduler is not None:
-                    if self.lr_scheduler == "plateau":
-                        scheduler.step(val_loss)
-                    elif self.lr_scheduler == "step":
-                        scheduler.step()
-                
-                # Get current learning rate
-                current_lr = optimizer.param_groups[0]['lr']
-                
-                # Status message
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    best_epoch = epoch
-                    patience_counter = 0
-                    status = "✓ New best!"
-                else:
-                    patience_counter += 1
-                    status = f"No improve ({patience_counter}/{self.patience})"
-                
-                print(f"    {epoch:<8} {train_loss:<12.6f} {val_loss:<12.6f} {current_lr:<12.8f} {status:<20}")
-                
-                if patience_counter >= self.patience:
-                    print(f"\n    Early stopping at epoch {epoch} (best was epoch {best_epoch})")
-                    break
-        else:
-            print(f"\n    Reached max iterations ({self.max_iter} epochs)")
+        step = 0
+        recent_train_losses = []
         
-        print(f"    Best validation loss: {best_val_loss:.6f} (epoch {best_epoch})")
+        while step < self.max_steps:
+            self.model.train()
+            
+            # Shuffle training data for this pass
+            perm = torch.randperm(n_train)
+            X_train_shuffled = X_train_t[perm]
+            y_train_shuffled = y_train_t[perm]
+            
+            # Iterate through batches
+            for batch_start in range(0, n_train, self.batch_size):
+                if step >= self.max_steps:
+                    break
+                    
+                batch_end = min(batch_start + self.batch_size, n_train)
+                X_batch = X_train_shuffled[batch_start:batch_end]
+                y_batch = y_train_shuffled[batch_start:batch_end]
+                
+                # Training step
+                optimizer.zero_grad()
+                outputs = self.model(X_batch)
+                loss = criterion(outputs, y_batch)
+                loss.backward()
+                optimizer.step()
+                
+                recent_train_losses.append(loss.item())
+                step += 1
+                
+                # Validation check
+                if step % self.eval_every_n_steps == 0 or step >= self.max_steps:
+                    # Calculate average recent train loss
+                    train_loss = sum(recent_train_losses) / len(recent_train_losses)
+                    recent_train_losses = []
+                    
+                    # Batched validation inference to avoid OOM
+                    self.model.eval()
+                    val_loss = 0.0
+                    n_val_batches = (n_val + self.batch_size - 1) // self.batch_size
+                    
+                    with torch.no_grad():
+                        for val_batch_idx in range(n_val_batches):
+                            val_start = val_batch_idx * self.batch_size
+                            val_end = min((val_batch_idx + 1) * self.batch_size, n_val)
+                            val_batch_out = self.model(X_val_t[val_start:val_end])
+                            val_batch_loss = criterion(val_batch_out, y_val_t[val_start:val_end]).item()
+                            val_loss += val_batch_loss * (val_end - val_start)
+                    
+                    val_loss = val_loss / n_val
+                    
+                    # Step scheduler if present
+                    if scheduler is not None:
+                        if self.lr_scheduler == "plateau":
+                            scheduler.step(val_loss)
+                        elif self.lr_scheduler == "step":
+                            scheduler.step()
+                    
+                    # Get current learning rate
+                    current_lr = optimizer.param_groups[0]['lr']
+                    
+                    # Update EMAs (Exponential Moving Averages) for smoothed loss tracking
+                    if ema_val_loss is None:
+                        # Initialize EMAs on first evaluation
+                        ema_val_loss = val_loss
+                        ema_train_loss = train_loss
+                        prev_ema_val_loss = val_loss
+                        prev_ema_train_loss = train_loss
+                    else:
+                        # Store previous EMAs for comparison
+                        prev_ema_val_loss = ema_val_loss
+                        prev_ema_train_loss = ema_train_loss
+                        # Update EMAs with new values
+                        ema_val_loss = ema_alpha * val_loss + (1 - ema_alpha) * ema_val_loss
+                        ema_train_loss = ema_alpha * train_loss + (1 - ema_alpha) * ema_train_loss
+                    
+                    # Early stopping logic using EMAs: increment patience only if:
+                    # - Train loss is roughly 0 (model has memorized training data)
+                    # - AND EMA val loss is consistently failing to improve
+                    min_improvement = 1e-5  # Minimum improvement to count as meaningful
+                    min_val_improvement_to_save = 1e-4  # Only save checkpoint if val loss improves by this much
+                    train_loss_threshold = 0.01  # Consider train loss "roughly 0" below this
+                    
+                    if val_loss < best_val_loss:
+                        val_improvement = best_val_loss - val_loss
+                        best_val_loss = val_loss
+                        best_step = step
+                        patience_counter = 0
+                        
+                        # Only save checkpoint if improvement is meaningful
+                        if val_improvement > min_val_improvement_to_save or best_model_state is None:
+                            status = "✓ New best!"
+                            best_model_state = {k: v.cpu().clone() for k, v in self.model.state_dict().items()}
+                        else:
+                            status = "✓ Best (no save)"
+                    elif step > self.eval_every_n_steps:  # Skip EMA checks on first eval
+                        # Only consider early stopping if train loss is near zero
+                        if ema_train_loss < train_loss_threshold:
+                            # Train loss is low - check if val loss has plateaued
+                            if ema_val_loss >= prev_ema_val_loss - min_improvement:
+                                # EMA val loss not improving
+                                patience_counter += 1
+                                status = f"Train~0, Val plateau ({patience_counter}/{self.patience})"
+                            else:
+                                # Val still improving even with low train loss
+                                status = "Train~0, Val improving"
+                        else:
+                            # Train loss still high - keep training
+                            status = f"Training (loss={ema_train_loss:.4f})"
+                    else:
+                        status = "Warming up"
+                    
+                    print(f"    {step:<8} {train_loss:<12.6f} {val_loss:<12.6f} {current_lr:<12.8f} {status:<20}")
+                    
+                    if patience_counter >= self.patience:
+                        print(f"\n    Early stopping at step {step} (best was step {best_step})")
+                        break
+                    
+                    self.model.train()  # Return to training mode
+            
+            if patience_counter >= self.patience:
+                break
+        else:
+            print(f"\n    Reached max steps ({self.max_steps})")
+        
+        print(f"    Best validation loss: {best_val_loss:.6f} (step {best_step})")
+        
+        # Restore best model weights
+        if best_model_state is not None:
+            self.model.load_state_dict({k: v.to(self.device) for k, v in best_model_state.items()})
+            print(f"    Restored model weights from step {best_step}")
+        
         print(f"    Training complete!\n")
         
         return self
     
     def predict_proba(self, X):
-        """Predict probabilities."""
+        """Predict probabilities in batches to avoid OOM."""
         import torch
         import torch.nn.functional as F
         
         self.model.eval()
+        
+        # Process in batches
+        n_samples = len(X)
+        all_probs = []
+        
         with torch.no_grad():
-            X_tensor = torch.FloatTensor(X).to(self.device)
-            logits = self.model(X_tensor)
-            probs = torch.sigmoid(logits).cpu().numpy().flatten()
-            # Return as [P(class=0), P(class=1)] for each sample
-            return np.column_stack([1 - probs, probs])
+            for start_idx in range(0, n_samples, self.batch_size):
+                end_idx = min(start_idx + self.batch_size, n_samples)
+                X_batch = X[start_idx:end_idx]
+                X_tensor = torch.FloatTensor(X_batch).to(self.device)
+                logits = self.model(X_tensor)
+                probs = torch.sigmoid(logits).cpu().numpy().flatten()
+                all_probs.append(probs)
+        
+        # Concatenate all batch results
+        probs = np.concatenate(all_probs)
+        # Return as [P(class=0), P(class=1)] for each sample
+        return np.column_stack([1 - probs, probs])
 
 
 def train_mlp_probe(
@@ -514,7 +913,10 @@ def train_mlp_probe(
     dropout: float = 0.1,
     patience: int = 10,
     lr_scheduler: str = None,
-    use_constant_residual: bool = False
+    use_constant_residual: bool = False,
+    batch_size: int = None,
+    max_steps: int = None,
+    eval_every_n_steps: int = None
 ) -> Tuple[float, object, np.ndarray, np.ndarray, np.ndarray]:
     """
     Train an MLP (Multi-Layer Perceptron) probe with skip connections and compute AUROC.
@@ -563,7 +965,10 @@ def train_mlp_probe(
         weight_decay=weight_decay,
         dropout=dropout,
         patience=patience,
-        lr_scheduler=lr_scheduler
+        lr_scheduler=lr_scheduler,
+        batch_size=batch_size,
+        max_steps=max_steps,
+        eval_every_n_steps=eval_every_n_steps
     )
     clf.fit(X_train, y_train)
 
@@ -709,7 +1114,7 @@ def measure_auroc_vs_training_size(
     n_trials: int = 10,
     max_iter: int = 1000,
     random_state: int = 42
-) -> dict:
+) -> tuple:
     """
     Measure how AUROC varies with training set size (Linear Probe).
 
@@ -722,15 +1127,23 @@ def measure_auroc_vs_training_size(
         random_state: Base random seed
 
     Returns:
-        Dictionary mapping training sizes to lists of error rates (1 - AUROC)
+        Tuple of (test_results, train_results):
+            test_results: Dictionary mapping training sizes to lists of test error rates (1 - AUROC)
+            train_results: Dictionary mapping training sizes to lists of train error rates (1 - AUROC)
     """
+    from sklearn.metrics import roc_auc_score
+    
     if n_values is None:
-        high = int(np.floor(np.log2(len(activations)))) - 1
-        n_values = [2**i for i in range(4, high+1)] + [int(len(activations)*0.9)]
+        high = min(int(np.floor(np.log2(len(activations)))) - 1, config.MAX_HIGH)
+        n_values = [2**i for i in range(4, high+1)]
+        top = int(len(activations)*0.9)
+        if top < 2**config.MAX_HIGH:
+            n_values.append(top)
         n_values = list(set(n_values))
         n_values.sort()
 
-    results = {n: [] for n in n_values}
+    test_results = {n: [] for n in n_values}
+    train_results = {n: [] for n in n_values}
 
     for n in n_values:
         print(f"Training linear probes with {n} examples")
@@ -746,12 +1159,17 @@ def measure_auroc_vs_training_size(
 
             # Need both classes in training set
             if len(X_test) > 0 and len(np.unique(y_train)) > 1:
-                auroc, _, _, _, _ = train_linear_probe(
+                auroc_test, clf, _, _, _ = train_linear_probe(
                     X_train, y_train, X_test, y_test, max_iter, random_state
                 )
-                results[n].append(1 - auroc)  # Store error rate
+                test_results[n].append(1 - auroc_test)  # Store test error rate
+                
+                # Also compute train AUROC
+                y_train_pred_proba = clf.predict_proba(X_train)[:, 1]
+                auroc_train = roc_auc_score(y_train, y_train_pred_proba)
+                train_results[n].append(1 - auroc_train)  # Store train error rate
 
-    return results
+    return test_results, train_results
 
 
 def measure_auroc_vs_training_size_mlp(
@@ -791,8 +1209,11 @@ def measure_auroc_vs_training_size_mlp(
         Dictionary mapping training sizes to lists of error rates (1 - AUROC)
     """
     if n_values is None:
-        high = int(np.floor(np.log2(len(activations)))) - 1
-        n_values = [2**i for i in range(4, high+1)] + [int(len(activations)*0.9)]
+        high = min(int(np.floor(np.log2(len(activations)))) - 1, config.MAX_HIGH)
+        n_values = [2**i for i in range(4, high+1)]
+        top = int(len(activations)*0.9)
+        if top < 2**config.MAX_HIGH:
+            n_values.append(top)
         n_values = list(set(n_values))
         n_values.sort()
 

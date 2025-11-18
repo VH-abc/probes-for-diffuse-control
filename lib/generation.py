@@ -130,6 +130,100 @@ def generate_with_vllm_concurrent(
         completions_dict[index] = []
 
 
+def worker_process(
+    worker_id: int,
+    port: int,
+    work_queue: mp.Queue,
+    results_dict: dict,
+    max_new_tokens: int,
+    temperature: float,
+    model_name: str,
+    max_workers: int = 10
+):
+    """
+    Worker process that pulls chunks from a queue and processes them.
+    
+    This enables dynamic load balancing - servers that finish quickly
+    get more work, and stalled servers don't block progress.
+    
+    Args:
+        worker_id: Unique identifier for this worker
+        port: VLLM server port
+        work_queue: Queue containing (chunk_id, prompts) tuples
+        results_dict: Shared dict for storing results by chunk_id
+        max_new_tokens: Maximum tokens to generate
+        temperature: Sampling temperature
+        model_name: Model name for API calls
+        max_workers: Maximum concurrent workers within this process
+    """
+    try:
+        # Lazy import of OpenAI (only when actually needed)
+        from openai import OpenAI
+        
+        # Connect to VLLM server
+        client = OpenAI(
+            base_url=f"http://localhost:{port}/v1",
+            api_key="EMPTY",
+            timeout=300.0  # 5 minute timeout
+        )
+        
+        chunks_processed = 0
+        total_prompts = 0
+        
+        while True:
+            # Try to get work from the queue
+            try:
+                chunk_id, prompts = work_queue.get(timeout=1.0)
+            except:
+                # Queue is empty or timeout - check if we're done
+                break
+            
+            # Process this chunk
+            chunk_start = time.time()
+            print(f"[Worker {worker_id}, Port {port}] Processing chunk {chunk_id} ({len(prompts)} prompts)...")
+            
+            full_texts = []
+            completions_only = []
+            
+            # Use ThreadPoolExecutor for concurrent requests within the chunk
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all requests concurrently
+                futures = []
+                for prompt in prompts:
+                    future = executor.submit(
+                        generate_single_prompt,
+                        client, prompt, max_new_tokens, temperature, model_name
+                    )
+                    futures.append(future)
+                
+                # Collect results as they complete
+                for future in futures:
+                    full_text, completion = future.result()
+                    full_texts.append(full_text)
+                    completions_only.append(completion)
+            
+            # Store results in shared dict with chunk_id as key
+            results_dict[chunk_id] = {
+                'full_texts': full_texts,
+                'completions': completions_only
+            }
+            
+            chunks_processed += 1
+            total_prompts += len(prompts)
+            elapsed = time.time() - chunk_start
+            rate = len(prompts) / elapsed if elapsed > 0 else 0
+            
+            print(f"[Worker {worker_id}, Port {port}] Chunk {chunk_id} complete! "
+                  f"{len(prompts)} prompts in {elapsed:.1f}s ({rate:.1f} prompts/sec)")
+        
+        print(f"[Worker {worker_id}, Port {port}] Finished! Processed {chunks_processed} chunks, {total_prompts} prompts total")
+        
+    except Exception as e:
+        print(f"[Worker {worker_id}, Port {port}] Error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def get_generation_cache_path(
     model_short_name: str,
     prompt_name: str,
@@ -262,10 +356,15 @@ def generate_with_vllm_multi_server(
     use_cache: bool = True,
     model_short_name: Optional[str] = None,
     prompt_name: Optional[str] = None,
-    subject_type: str = "all"
+    subject_type: str = "all",
+    chunk_size: Optional[int] = None
 ) -> Tuple[List[str], List[str]]:
     """
-    Generate completions using multiple VLLM API servers in parallel.
+    Generate completions using multiple VLLM API servers with dynamic load balancing.
+    
+    Uses a work queue to distribute small chunks of prompts dynamically. Servers
+    that complete chunks quickly automatically get more work, preventing stalls
+    from blocking overall progress.
     
     Caches generations based on high-level parameters (prompt format, model, subject, num_samples).
 
@@ -281,6 +380,7 @@ def generate_with_vllm_multi_server(
         model_short_name: Short model name for cache organization
         prompt_name: Prompt name for cache organization (e.g., "benign", "semimalign")
         subject_type: Subject type for cache organization (e.g., "all", "math", "nonmath")
+        chunk_size: Size of chunks for dynamic distribution (default: from config.VLLM_CHUNK_SIZE)
 
     Returns:
         full_texts: List of full generated text (prompt + completion)
@@ -321,54 +421,78 @@ def generate_with_vllm_multi_server(
         else:
             print(f"  No cache found - will generate and save")
     
+    # Determine chunk size
+    if chunk_size is None:
+        # Import config to get default chunk size
+        import config
+        chunk_size = config.VLLM_CHUNK_SIZE
+    
     # Generate if not cached
     print(f"\n{'='*60}")
     print(f"Distributing {len(prompts)} prompts across {num_servers} VLLM servers")
     print(f"Servers: ports {base_port} to {base_port + num_servers - 1}")
     print(f"Model: {model_name}")
     print(f"Max concurrent requests/server: {max_concurrent_requests}")
+    print(f"Chunk size: {chunk_size}")
     print(f"{'='*60}")
 
-    # Split prompts into chunks for each server
-    chunk_size = (len(prompts) + num_servers - 1) // num_servers
-    prompt_chunks = [prompts[i:i + chunk_size] for i in range(0, len(prompts), chunk_size)]
+    # Split prompts into small chunks for dynamic distribution
+    prompt_chunks = []
+    for i in range(0, len(prompts), chunk_size):
+        prompt_chunks.append(prompts[i:i + chunk_size])
+    
+    num_chunks = len(prompt_chunks)
+    print(f"Created {num_chunks} chunks (sizes: {[len(c) for c in prompt_chunks[:5]]}{'...' if num_chunks > 5 else ''})")
 
-    print(f"Chunk sizes: {[len(chunk) for chunk in prompt_chunks]}")
-
-    # Use Manager to share results between processes
+    # Use Manager to share work queue and results between processes
     manager = Manager()
-    return_dict = manager.dict()
-    completions_dict = manager.dict()
+    work_queue = manager.Queue()
+    results_dict = manager.dict()
+    
+    # Populate work queue with (chunk_id, prompts) tuples
+    for chunk_id, chunk_prompts in enumerate(prompt_chunks):
+        work_queue.put((chunk_id, chunk_prompts))
+    
+    print(f"Work queue populated with {num_chunks} chunks")
 
-    # Create and start processes for each server
+    # Create and start worker processes (one per server)
     processes = []
-    for i, chunk in enumerate(prompt_chunks):
+    for i in range(num_servers):
         port = base_port + i
         p = mp.Process(
-            target=generate_with_vllm_concurrent,
-            args=(port, chunk, max_new_tokens, temperature, model_name,
-                  return_dict, completions_dict, i, max_concurrent_requests)
+            target=worker_process,
+            args=(i, port, work_queue, results_dict, max_new_tokens, 
+                  temperature, model_name, max_concurrent_requests)
         )
         p.start()
         processes.append(p)
+    
+    print(f"Started {num_servers} worker processes")
 
     # Wait for all processes to complete
     for p in processes:
         p.join()
 
-    # Flatten results back into single list (maintaining order)
+    # Reconstruct results in original order using chunk_ids
     full_texts = []
     completions = []
-    for i in range(len(prompt_chunks)):
-        if i in return_dict:
-            full_texts.extend(return_dict[i])
-            completions.extend(completions_dict[i])
+    
+    for chunk_id in range(num_chunks):
+        if chunk_id in results_dict:
+            chunk_results = results_dict[chunk_id]
+            full_texts.extend(chunk_results['full_texts'])
+            completions.extend(chunk_results['completions'])
         else:
-            print(f"Warning: Server {i} (port {base_port + i}) did not return results")
+            print(f"Warning: Chunk {chunk_id} not found in results")
+            # Fill with empty results to maintain alignment
+            expected_size = len(prompt_chunks[chunk_id])
+            full_texts.extend([""] * expected_size)
+            completions.extend([""] * expected_size)
 
     print(f"\nAll servers completed generation!")
     print(f"  Total full texts: {len(full_texts)}")
     print(f"  Total completions: {len(completions)}")
+    print(f"  Expected: {len(prompts)}")
     
     # Save to cache if requested
     if use_cache and model_short_name and prompt_name:
@@ -386,6 +510,8 @@ def generate_with_vllm_multi_server(
             "temperature": temperature,
             "num_samples": len(prompts),
             "num_servers": num_servers,
+            "chunk_size": chunk_size,
+            "num_chunks": num_chunks,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
         }
         

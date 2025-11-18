@@ -241,14 +241,16 @@ def run_probe_analysis(
             auroc_mlp, clf_mlp, y_pred_proba_mlp, fpr_mlp, tpr_mlp = train_mlp_probe(
                 X_train, y_train, X_test, y_test,
                 hidden_layer_sizes=config.MLP_HIDDEN_LAYER_SIZES,
-                max_iter=config.PROBE_MAX_ITER,
                 random_state=config.PROBE_RANDOM_STATE,
                 learning_rate=config.MLP_LEARNING_RATE,
                 weight_decay=config.MLP_WEIGHT_DECAY,
                 dropout=config.MLP_DROPOUT,
                 patience=config.MLP_PATIENCE,
                 lr_scheduler=config.MLP_LR_SCHEDULER,
-                use_constant_residual=config.MLP_USE_CONSTANT_RESIDUAL
+                use_constant_residual=config.MLP_USE_CONSTANT_RESIDUAL,
+                batch_size=config.MLP_BATCH_SIZE,
+                max_steps=config.MLP_MAX_STEPS,
+                eval_every_n_steps=config.MLP_EVAL_EVERY_N_STEPS
             )
             print(f"  AUROC: {auroc_mlp:.4f}")
 
@@ -317,12 +319,13 @@ def run_probe_analysis(
 
     # Experiment 5: AUROC vs Training Set Size (Linear Probe)
     results_linear = None
+    train_results_linear = None
     if "auroc_vs_n" in experiments or experiments == "all":
         print(f"\n{'=' * 60}")
         print(f"Experiment 5: AUROC vs Training Set Size (Linear Probe)")
         print(f"{'=' * 60}")
 
-        results_linear = measure_auroc_vs_training_size(
+        results_linear, train_results_linear = measure_auroc_vs_training_size(
             activations, labels,
             n_values=None,
             n_trials=config.LINEAR_AUROC_VS_N_NUM_TRIALS,
@@ -330,14 +333,21 @@ def run_probe_analysis(
             random_state=config.PROBE_RANDOM_STATE
         )
 
+        print("\n  Test Set Performance:")
         for n, errors in results_linear.items():
             if errors:
-                print(f"  N={n}: Error = {np.mean(errors):.4f} ± {np.std(errors):.4f}")
+                print(f"    N={n}: Error = {np.mean(errors):.4f} ± {np.std(errors):.4f}")
+        
+        print("\n  Train Set Performance:")
+        for n, errors in train_results_linear.items():
+            if errors:
+                print(f"    N={n}: Error = {np.mean(errors):.4f} ± {np.std(errors):.4f}")
 
         plot_auroc_vs_training_size(
             results_linear,
             os.path.join(results_dir, f"auroc_vs_n_{fname}.png"),
-            title="Linear Probe Error vs Training Set Size"
+            title="Linear Probe Error vs Training Set Size",
+            train_results=train_results_linear
         )
 
     # Experiment 5b: AUROC vs Training Set Size (MLP Probe)

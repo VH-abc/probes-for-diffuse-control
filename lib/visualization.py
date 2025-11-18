@@ -363,15 +363,17 @@ def plot_pca_by_subject(
 def plot_auroc_vs_training_size(
     results: dict,
     output_path: str,
-    title: str = "Probe Error vs Training Set Size"
+    title: str = "Probe Error vs Training Set Size",
+    train_results: dict = None
 ):
     """
     Plot how probe error varies with training set size.
 
     Args:
-        results: Dictionary mapping training sizes to lists of error rates
+        results: Dictionary mapping training sizes to lists of test error rates
         output_path: Path to save plot
         title: Plot title
+        train_results: Optional dictionary mapping training sizes to lists of train error rates
     """
     import matplotlib.pyplot as plt
     
@@ -380,12 +382,23 @@ def plot_auroc_vs_training_size(
     stds = [np.std(results[n]) if results[n] else 0 for n in n_values]
 
     plt.figure(figsize=(10, 6))
-    plt.errorbar(n_values, means, yerr=stds, marker='o', capsize=5, linewidth=2, markersize=8)
+    plt.errorbar(n_values, means, yerr=stds, marker='o', capsize=5, linewidth=2, 
+                 markersize=8, label='Test Error', alpha=0.8)
+    
+    # Add train error if provided
+    if train_results is not None:
+        train_means = [np.mean(train_results[n]) if train_results[n] else np.nan for n in n_values]
+        train_stds = [np.std(train_results[n]) if train_results[n] else 0 for n in n_values]
+        plt.errorbar(n_values, train_means, yerr=train_stds, marker='s', capsize=5, 
+                     linewidth=2, markersize=8, label='Train Error', alpha=0.8, linestyle='--')
+    
     plt.xscale('log')
     plt.xticks(n_values, [str(n) for n in n_values])
     plt.xlabel('Training Set Size (N)', fontsize=12)
     plt.ylabel('Error (1 - AUROC)', fontsize=12)
     plt.title(title, fontsize=14)
+    if train_results is not None:
+        plt.legend(fontsize=11, loc='best')
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     if config.SAVE_PLOTS:
