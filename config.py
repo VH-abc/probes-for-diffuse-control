@@ -21,7 +21,7 @@ ACTIVATION_GPUS = [3, 4, 5, 6, 7]  # GPUs for activation extraction (should not 
 BASE_DIR = "experiments"
 CACHED_ACTIVATIONS_DIR = f"{BASE_DIR}/{MODEL_SHORT_NAME}/cached_activations"
 RESULTS_DIR = f"{BASE_DIR}/{MODEL_SHORT_NAME}/results"  # Base results directory
-MMLU_FILE = "mmlu_data/test.json"
+MMLU_FILE = "mmlu_data/train.json" #"mmlu_data/test.json"
 
 def get_results_dir(num_examples: int = None, filter_reliable: bool = False, prompt_name: str = None) -> str:
     """
@@ -48,19 +48,21 @@ def get_results_dir(num_examples: int = None, filter_reliable: bool = False, pro
         return f"{RESULTS_DIR}/n{num_examples}_{filter_suffix}"
 
 # Generation parameters
-MAX_NEW_TOKENS = 6 #100 #900 #100
+USE_MULTI_TOKEN_PROMPTS = True
+MAX_NEW_TOKENS = 100 #100 #900 #100
 TEMPERATURE = 1.0  # Sampling temperature
 
 # Experiment parameters
+RELIABLE_QUESTIONS_NUM_TRIALS = 3
+DEFAULT_NUM_EXAMPLES = 100000
 DEFAULT_LAYER = 30
-DEFAULT_NUM_EXAMPLES = 20000
 DEFAULT_TOKEN_POSITION = "letter"
 # Available experiments: ["linear_probe", "mlp_probe", "pca", "anomaly_detection", "auroc_vs_n", "corruption_sweep", "auroc_vs_n_mlp"]
 DEFAULT_EXPERIMENTS = "all" #["linear_probe", "mlp_probe"] #["linear_probe", "mlp_probe", "pca", "anomaly_detection", "auroc_vs_n", "auroc_vs_n_mlp", "corruption_sweep"]
 
 # Positions to cache in unified cache (excludes "all" and "all_appended" which can be computed from others)
 # CACHED_POSITIONS = [DEFAULT_TOKEN_POSITION] #["last", "first", "middle", "letter"]
-CACHED_POSITIONS = ["last", "first", "middle", "letter", "letter+1", "yes-no"]
+CACHED_POSITIONS = ["last", "letter", "letter+1"] #, "yes-no"]
 
 # SUPPORTED_LAYERS = [DEFAULT_LAYER] #[0, 2, 5, 10, 15, 20, 25, 30, 36, 42, 45, 47]
 SUPPORTED_LAYERS = [0, 2, 5, 10, 15, 20, 25, 30, 36, 42, 45, 47]
@@ -87,7 +89,7 @@ MLP_LR_SCHEDULER = None
 MLP_USE_CONSTANT_RESIDUAL = False
 
 # Multiprocessing parameters
-MAX_CONCURRENT_REQUESTS_PER_SERVER = 10  # For VLLM API calls
+MAX_CONCURRENT_REQUESTS_PER_SERVER = 1000  # For VLLM API calls
 ACTIVATION_BATCH_SIZE = 1000 # Batch size for activation extraction (reduce if OOM)
 
 # Visualization parameters

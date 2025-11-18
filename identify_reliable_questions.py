@@ -246,8 +246,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Identify questions with 100% pass rate"
     )
-    parser.add_argument("--num-trials", type=int, default=10,
-                        help="Number of trials per question (default: 10)")
+    parser.add_argument("--num-trials", type=int, default=config.RELIABLE_QUESTIONS_NUM_TRIALS,
+                        help=f"Number of trials per question (default: {config.RELIABLE_QUESTIONS_NUM_TRIALS})")
     parser.add_argument("--num-examples", type=int, help=f"Target number of reliable questions to find (default: {config.DEFAULT_NUM_EXAMPLES})")
     parser.add_argument("--batch-size", type=int,
                         help="Number of questions to test per batch (default: None)")
@@ -255,7 +255,7 @@ if __name__ == "__main__":
                         help=f"Temperature for generation (default: {config.TEMPERATURE})")
     parser.add_argument("--max-tokens", type=int, help=f"Max new tokens (default: {config.MAX_NEW_TOKENS})")
     parser.add_argument("--num-gpus", type=int, help=f"Number of GPUs (default: {config.VLLM_NUM_SERVERS})")
-    parser.add_argument("--mmlu-file", type=str, default="mmlu_data/test.json",
+    parser.add_argument("--mmlu-file", type=str, default=config.MMLU_FILE,
                         help="Path to MMLU data file")
     parser.add_argument("--output-file", type=str, help="Output file path", default=f"experiments/{config.MODEL_SHORT_NAME}/reliable_questions.json")
     
