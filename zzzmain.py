@@ -18,8 +18,9 @@ results_dir = config.get_results_dir(num_examples, filter_reliable, prompt_name)
 sweep_summary_file = os.path.join(results_dir, f"sweep_summary_{filter_suffix}.txt")
 
 if os.path.exists(sweep_summary_file):
-    os.remove(sweep_summary_file)
-    print(f"Cleared previous sweep summary: {sweep_summary_file}\n")
+    # os.remove(sweep_summary_file)
+    # print(f"Cleared previous sweep summary: {sweep_summary_file}\n")
+    pass
 
 sweep.sweep_layers(
     prompt_name="lie_detector",

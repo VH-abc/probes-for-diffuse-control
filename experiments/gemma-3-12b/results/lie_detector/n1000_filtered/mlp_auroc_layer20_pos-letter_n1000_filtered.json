@@ -1,0 +1,5 @@
+{
+  "auroc": 0.9419144001686696,
+  "fname": "layer20_pos-letter_n1000_filtered",
+  "classifier": "mlp"
+}

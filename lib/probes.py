@@ -376,6 +376,8 @@ class ResidualMLPClassifier:
         patience_counter = 0
         best_step = 0
         best_model_state = None
+        improvement_count = 0  # Track number of validation improvements
+        save_checkpoint_every_n = getattr(config, 'MLP_SAVE_CHECKPOINT_EVERY_N', 5)
         
         n_train = len(X_train_t)
         n_val = len(X_val_t)
@@ -464,21 +466,20 @@ class ResidualMLPClassifier:
                     # - Train loss is roughly 0 (model has memorized training data)
                     # - AND EMA val loss is consistently failing to improve
                     min_improvement = 1e-5  # Minimum improvement to count as meaningful
-                    min_val_improvement_to_save = 1e-4  # Only save checkpoint if val loss improves by this much
                     train_loss_threshold = 0.01  # Consider train loss "roughly 0" below this
                     
                     if val_loss < best_val_loss:
-                        val_improvement = best_val_loss - val_loss
                         best_val_loss = val_loss
                         best_step = step
                         patience_counter = 0
+                        improvement_count += 1
                         
-                        # Only save checkpoint if improvement is meaningful
-                        if val_improvement > min_val_improvement_to_save or best_model_state is None:
-                            status = "✓ New best!"
+                        # Save checkpoint every Nth improvement or if it's the first improvement
+                        if improvement_count % save_checkpoint_every_n == 0 or best_model_state is None:
+                            status = f"✓ New best! (saved #{improvement_count})"
                             best_model_state = {k: v.cpu().clone() for k, v in self.model.state_dict().items()}
                         else:
-                            status = "✓ Best (no save)"
+                            status = f"✓ Best #{improvement_count} (no save)"
                     elif step > self.eval_every_n_steps:  # Skip EMA checks on first eval
                         # Only consider early stopping if train loss is near zero
                         if ema_train_loss < train_loss_threshold:
@@ -511,10 +512,47 @@ class ResidualMLPClassifier:
         
         print(f"    Best validation loss: {best_val_loss:.6f} (step {best_step})")
         
-        # Restore best model weights
+        # Store final model state for comparison
+        final_model_state = {k: v.cpu().clone() for k, v in self.model.state_dict().items()}
+        
+        # Compare final model vs best checkpoint using validation AUROC
         if best_model_state is not None:
+            # Compute final model AUROC
+            self.model.eval()
+            with torch.no_grad():
+                final_logits = []
+                for val_batch_idx in range((n_val + self.batch_size - 1) // self.batch_size):
+                    val_start = val_batch_idx * self.batch_size
+                    val_end = min((val_batch_idx + 1) * self.batch_size, n_val)
+                    logits = self.model(X_val_t[val_start:val_end])
+                    final_logits.append(torch.sigmoid(logits).cpu().numpy())
+                final_probs = np.concatenate(final_logits).flatten()
+            
+            from sklearn.metrics import roc_auc_score
+            final_auroc = roc_auc_score(y_val_t.cpu().numpy(), final_probs)
+            
+            # Restore and compute best checkpoint AUROC
             self.model.load_state_dict({k: v.to(self.device) for k, v in best_model_state.items()})
-            print(f"    Restored model weights from step {best_step}")
+            self.model.eval()
+            with torch.no_grad():
+                best_logits = []
+                for val_batch_idx in range((n_val + self.batch_size - 1) // self.batch_size):
+                    val_start = val_batch_idx * self.batch_size
+                    val_end = min((val_batch_idx + 1) * self.batch_size, n_val)
+                    logits = self.model(X_val_t[val_start:val_end])
+                    best_logits.append(torch.sigmoid(logits).cpu().numpy())
+                best_probs = np.concatenate(best_logits).flatten()
+            best_auroc = roc_auc_score(y_val_t.cpu().numpy(), best_probs)
+            
+            # Keep the better model
+            if final_auroc > best_auroc:
+                self.model.load_state_dict({k: v.to(self.device) for k, v in final_model_state.items()})
+                print(f"    Using final model (AUROC: {final_auroc:.4f} > {best_auroc:.4f})")
+            else:
+                print(f"    Using best checkpoint from step {best_step} (AUROC: {best_auroc:.4f} >= {final_auroc:.4f})")
+        else:
+            # No checkpoint saved, use final model
+            print(f"    Using final model (no checkpoint was saved)")
         
         print(f"    Training complete!\n")
         
@@ -1043,6 +1081,8 @@ class ConstantResidualMLPClassifier:
         patience_counter = 0
         best_step = 0
         best_model_state = None
+        improvement_count = 0  # Track number of validation improvements
+        save_checkpoint_every_n = getattr(config, 'MLP_SAVE_CHECKPOINT_EVERY_N', 5)
         
         n_train = len(X_train_t)
         n_val = len(X_val_t)
@@ -1131,21 +1171,20 @@ class ConstantResidualMLPClassifier:
                     # - Train loss is roughly 0 (model has memorized training data)
                     # - AND EMA val loss is consistently failing to improve
                     min_improvement = 1e-5  # Minimum improvement to count as meaningful
-                    min_val_improvement_to_save = 1e-4  # Only save checkpoint if val loss improves by this much
                     train_loss_threshold = 0.01  # Consider train loss "roughly 0" below this
                     
                     if val_loss < best_val_loss:
-                        val_improvement = best_val_loss - val_loss
                         best_val_loss = val_loss
                         best_step = step
                         patience_counter = 0
+                        improvement_count += 1
                         
-                        # Only save checkpoint if improvement is meaningful
-                        if val_improvement > min_val_improvement_to_save or best_model_state is None:
-                            status = "✓ New best!"
+                        # Save checkpoint every Nth improvement or if it's the first improvement
+                        if improvement_count % save_checkpoint_every_n == 0 or best_model_state is None:
+                            status = f"✓ New best! (saved #{improvement_count})"
                             best_model_state = {k: v.cpu().clone() for k, v in self.model.state_dict().items()}
                         else:
-                            status = "✓ Best (no save)"
+                            status = f"✓ Best #{improvement_count} (no save)"
                     elif step > self.eval_every_n_steps:  # Skip EMA checks on first eval
                         # Only consider early stopping if train loss is near zero
                         if ema_train_loss < train_loss_threshold:
@@ -1178,10 +1217,47 @@ class ConstantResidualMLPClassifier:
         
         print(f"    Best validation loss: {best_val_loss:.6f} (step {best_step})")
         
-        # Restore best model weights
+        # Store final model state for comparison
+        final_model_state = {k: v.cpu().clone() for k, v in self.model.state_dict().items()}
+        
+        # Compare final model vs best checkpoint using validation AUROC
         if best_model_state is not None:
+            # Compute final model AUROC
+            self.model.eval()
+            with torch.no_grad():
+                final_logits = []
+                for val_batch_idx in range((n_val + self.batch_size - 1) // self.batch_size):
+                    val_start = val_batch_idx * self.batch_size
+                    val_end = min((val_batch_idx + 1) * self.batch_size, n_val)
+                    logits = self.model(X_val_t[val_start:val_end])
+                    final_logits.append(torch.sigmoid(logits).cpu().numpy())
+                final_probs = np.concatenate(final_logits).flatten()
+            
+            from sklearn.metrics import roc_auc_score
+            final_auroc = roc_auc_score(y_val_t.cpu().numpy(), final_probs)
+            
+            # Restore and compute best checkpoint AUROC
             self.model.load_state_dict({k: v.to(self.device) for k, v in best_model_state.items()})
-            print(f"    Restored model weights from step {best_step}")
+            self.model.eval()
+            with torch.no_grad():
+                best_logits = []
+                for val_batch_idx in range((n_val + self.batch_size - 1) // self.batch_size):
+                    val_start = val_batch_idx * self.batch_size
+                    val_end = min((val_batch_idx + 1) * self.batch_size, n_val)
+                    logits = self.model(X_val_t[val_start:val_end])
+                    best_logits.append(torch.sigmoid(logits).cpu().numpy())
+                best_probs = np.concatenate(best_logits).flatten()
+            best_auroc = roc_auc_score(y_val_t.cpu().numpy(), best_probs)
+            
+            # Keep the better model
+            if final_auroc > best_auroc:
+                self.model.load_state_dict({k: v.to(self.device) for k, v in final_model_state.items()})
+                print(f"    Using final model (AUROC: {final_auroc:.4f} > {best_auroc:.4f})")
+            else:
+                print(f"    Using best checkpoint from step {best_step} (AUROC: {best_auroc:.4f} >= {final_auroc:.4f})")
+        else:
+            # No checkpoint saved, use final model
+            print(f"    Using final model (no checkpoint was saved)")
         
         print(f"    Training complete!\n")
         

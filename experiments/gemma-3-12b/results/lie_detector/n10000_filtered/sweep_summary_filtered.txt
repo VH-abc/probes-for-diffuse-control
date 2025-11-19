@@ -1,0 +1,116 @@
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 10000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          N/A             N/A            
+
+------------------------------------------------------------
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 10000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          0.8312          0.9756         
+
+------------------------------------------------------------
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8312)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.9756)
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 10000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          0.8312          0.9756         
+
+------------------------------------------------------------
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8312)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.9756)
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 10000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          0.8312          0.9756         
+
+------------------------------------------------------------
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8312)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.9756)
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 10000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          0.8312          0.9756         
+
+------------------------------------------------------------
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8312)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.9756)
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 10000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          0.8312          0.9756         
+
+------------------------------------------------------------
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8312)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.9756)
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 10000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          0.8312          0.9756         
+
+------------------------------------------------------------
+🏆 BEST LINEAR: Layer 30, Position 'letter' (AUROC = 0.8312)
+🏆 BEST MLP:    Layer 30, Position 'letter' (AUROC = 0.9756)
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 10000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+47         letter          N/A             N/A            
+
+------------------------------------------------------------
+

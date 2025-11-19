@@ -126,7 +126,6 @@ def main():
         "--prompt",
         type=str,
         default="benign",
-        choices=["benign", "semimalign", "lie detector part 1"],
         help="Prompt name to use"
     )
     parser.add_argument(
