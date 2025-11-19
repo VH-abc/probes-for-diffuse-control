@@ -36,7 +36,7 @@ def test_train_auroc_plotting():
     
     # Test measure_auroc_vs_training_size returns tuple
     print(f"\n{'=' * 80}")
-    print("Test 1: Function returns (test_results, train_results) tuple")
+    print("Test 1: Function returns (test_results, train_results, cv_info) tuple")
     print("=" * 80)
     
     n_values = [16, 32, 64, 128, 256]
@@ -48,11 +48,11 @@ def test_train_auroc_plotting():
         random_state=42
     )
     
-    if isinstance(result, tuple) and len(result) == 2:
-        print("✓ Function returns tuple of length 2")
-        test_results, train_results = result
+    if isinstance(result, tuple) and len(result) == 3:
+        print("✓ Function returns tuple of length 3")
+        test_results, train_results, cv_info = result
     else:
-        print(f"❌ ERROR: Function returned {type(result)}, expected tuple")
+        print(f"❌ ERROR: Function returned {type(result)} with length {len(result) if isinstance(result, tuple) else 'N/A'}, expected tuple of length 3")
         return False
     
     # Verify both are dictionaries with correct keys
@@ -119,8 +119,9 @@ def test_train_auroc_plotting():
     print("✓ ALL TESTS PASSED!")
     print("=" * 80)
     print("\nSummary:")
-    print("  • measure_auroc_vs_training_size() now returns (test_results, train_results)")
+    print("  • measure_auroc_vs_training_size() now returns (test_results, train_results, cv_info)")
     print("  • Train AUROC is computed for each training set size")
+    print("  • CV info includes alpha selection details if CV was enabled")
     print("  • plot_auroc_vs_training_size() accepts optional train_results parameter")
     print("  • When train_results is provided, both curves are plotted")
     print("  • Backward compatibility maintained (train_results is optional)")

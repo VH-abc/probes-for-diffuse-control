@@ -11,3 +11,29 @@ Layer      Position        Linear AUROC    MLP AUROC
 
 ------------------------------------------------------------
 
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 100000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          N/A             N/A            
+
+------------------------------------------------------------
+
+SWEEP SUMMARY
+Model: gemma-3-12b
+Prompt: lie_detector
+Filtered: True
+Examples: 100000
+================================================================================
+
+Layer      Position        Linear AUROC    MLP AUROC      
+------------------------------------------------------------
+30         letter          N/A             N/A            
+
+------------------------------------------------------------
+

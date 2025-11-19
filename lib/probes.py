@@ -27,7 +27,10 @@ def train_linear_probe(
     tol: float = None,
     n_jobs: int = None,
     verbose: bool = None,
-    mode: str = None
+    mode: str = None,
+    alpha_cv_enabled: bool = None,
+    alpha_cv_folds: int = None,
+    alpha_cv_alphas: list = None
 ) -> Tuple[float, "LogisticRegression", np.ndarray, np.ndarray, np.ndarray]:
     """
     Train a logistic regression probe and compute AUROC.
@@ -46,6 +49,10 @@ def train_linear_probe(
         verbose: Print diagnostic information. If None, uses config.PROBE_VERBOSE
         mode: Linear probe mode ("sklearn", "pytorch", "closed_form"). 
               If None, uses config.LINEAR_PROBE_MODE
+        alpha_cv_enabled: Enable k-fold CV for alpha selection (closed_form mode only).
+                         If None, uses config.RIDGE_ALPHA_CV_ENABLED
+        alpha_cv_folds: Number of CV folds. If None, uses config.RIDGE_ALPHA_CV_FOLDS
+        alpha_cv_alphas: List of alpha values to test. If None, uses config.RIDGE_ALPHA_CV_ALPHAS
 
     Returns:
         auroc: AUROC score
@@ -62,19 +69,76 @@ def train_linear_probe(
     
     # Closed-form ridge regression (fastest)
     if mode == "closed_form":
-        from sklearn.metrics import roc_curve, auc
+        from sklearn.metrics import roc_curve, auc, roc_auc_score
+        from sklearn.model_selection import KFold
         
-        print(f"  Training Closed-Form Ridge Probe...")
+        # Get CV parameters from config if not provided
+        if alpha_cv_enabled is None:
+            alpha_cv_enabled = getattr(config, 'RIDGE_ALPHA_CV_ENABLED', False)
+        if alpha_cv_folds is None:
+            alpha_cv_folds = getattr(config, 'RIDGE_ALPHA_CV_FOLDS', 5)
+        if alpha_cv_alphas is None:
+            alpha_cv_alphas = getattr(config, 'RIDGE_ALPHA_CV_ALPHAS', [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2])
         
-        clf = ClosedFormRidgeClassifier(
-            alpha=getattr(config, 'RIDGE_ALPHA', 1e-4),
-            use_dual=getattr(config, 'RIDGE_USE_DUAL', 'auto'),
-            dual_threshold=getattr(config, 'RIDGE_DUAL_THRESHOLD', 0.5),
-            random_state=random_state,
-            batch_size=getattr(config, 'LINEAR_PROBE_BATCH_SIZE', 1024)
-        )
-        
-        clf.fit(X_train, y_train)
+        # Perform k-fold CV to select best alpha
+        if alpha_cv_enabled:
+            print(f"  Training Closed-Form Ridge Probe with {alpha_cv_folds}-fold CV...")
+            print(f"  Testing {len(alpha_cv_alphas)} alpha values: {alpha_cv_alphas}")
+            
+            kf = KFold(n_splits=alpha_cv_folds, shuffle=True, random_state=random_state)
+            cv_results = {}
+            
+            for alpha in alpha_cv_alphas:
+                fold_aurocs = []
+                for fold_idx, (train_idx, val_idx) in enumerate(kf.split(X_train)):
+                    X_fold_train, X_fold_val = X_train[train_idx], X_train[val_idx]
+                    y_fold_train, y_fold_val = y_train[train_idx], y_train[val_idx]
+                    
+                    # Train model with this alpha
+                    clf_fold = ClosedFormRidgeClassifier(
+                        alpha=alpha,
+                        use_dual=getattr(config, 'RIDGE_USE_DUAL', 'auto'),
+                        dual_threshold=getattr(config, 'RIDGE_DUAL_THRESHOLD', 0.5),
+                        random_state=random_state,
+                        batch_size=getattr(config, 'LINEAR_PROBE_BATCH_SIZE', 1024)
+                    )
+                    clf_fold.fit(X_fold_train, y_fold_train)
+                    
+                    # Validate
+                    y_fold_pred = clf_fold.predict_proba(X_fold_val)[:, 1]
+                    fold_auroc = roc_auc_score(y_fold_val, y_fold_pred)
+                    fold_aurocs.append(fold_auroc)
+                
+                cv_results[alpha] = np.mean(fold_aurocs)
+                print(f"    Alpha {alpha:.2e}: CV AUROC = {cv_results[alpha]:.4f}")
+            
+            # Select best alpha
+            best_alpha = max(cv_results, key=cv_results.get)
+            print(f"  Best alpha: {best_alpha:.2e} (CV AUROC: {cv_results[best_alpha]:.4f})")
+            
+            # Train final model with best alpha on full training set
+            clf = ClosedFormRidgeClassifier(
+                alpha=best_alpha,
+                use_dual=getattr(config, 'RIDGE_USE_DUAL', 'auto'),
+                dual_threshold=getattr(config, 'RIDGE_DUAL_THRESHOLD', 0.5),
+                random_state=random_state,
+                batch_size=getattr(config, 'LINEAR_PROBE_BATCH_SIZE', 1024)
+            )
+            clf.fit(X_train, y_train)
+            clf.best_alpha_ = best_alpha
+            clf.cv_results_ = cv_results
+        else:
+            # Use fixed alpha from config (original behavior)
+            print(f"  Training Closed-Form Ridge Probe...")
+            
+            clf = ClosedFormRidgeClassifier(
+                alpha=getattr(config, 'RIDGE_ALPHA', 1e-4),
+                use_dual=getattr(config, 'RIDGE_USE_DUAL', 'auto'),
+                dual_threshold=getattr(config, 'RIDGE_DUAL_THRESHOLD', 0.5),
+                random_state=random_state,
+                batch_size=getattr(config, 'LINEAR_PROBE_BATCH_SIZE', 1024)
+            )
+            clf.fit(X_train, y_train)
         
         y_pred_proba = clf.predict_proba(X_test)[:, 1]
         fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
@@ -650,6 +714,8 @@ class ClosedFormRidgeClassifier:
         self.weights = None
         self.bias = None
         self.device = None
+        self.best_alpha_ = None  # Store selected alpha after CV
+        self.cv_results_ = None  # Store CV results
         
     def fit(self, X, y):
         """
@@ -1537,9 +1603,11 @@ def measure_auroc_vs_training_size(
         random_state: Base random seed
 
     Returns:
-        Tuple of (test_results, train_results):
+        Tuple of (test_results, train_results, cv_info):
             test_results: Dictionary mapping training sizes to lists of test error rates (1 - AUROC)
             train_results: Dictionary mapping training sizes to lists of train error rates (1 - AUROC)
+            cv_info: Dictionary with CV information for each (n, trial):
+                     Keys are (n, trial) tuples, values are dicts with 'cv_results' and 'best_alpha'
     """
     from sklearn.metrics import roc_auc_score
     
@@ -1549,12 +1617,13 @@ def measure_auroc_vs_training_size(
         top = int(len(activations)*0.9)
         if top < 2**config.MAX_HIGH:
             n_values.append(top)
-        n_values += [3000, 3800, 3900, 4000, 5000, 6000]
+        # n_values += [3000, 3800, 3900, 4000, 5000, 6000]
         n_values = list(set(n_values))
         n_values.sort()
 
     test_results = {n: [] for n in n_values}
     train_results = {n: [] for n in n_values}
+    cv_info = {}  # Store CV information for each (n, trial)
 
     for n in n_values:
         print(f"Training linear probes with {n} examples")
@@ -1579,8 +1648,15 @@ def measure_auroc_vs_training_size(
                 y_train_pred_proba = clf.predict_proba(X_train)[:, 1]
                 auroc_train = roc_auc_score(y_train, y_train_pred_proba)
                 train_results[n].append(1 - auroc_train)  # Store train error rate
+                
+                # Store CV information if available
+                if hasattr(clf, 'best_alpha_') and clf.best_alpha_ is not None:
+                    cv_info[(n, trial)] = {
+                        'best_alpha': clf.best_alpha_,
+                        'cv_results': clf.cv_results_  # Dict mapping alpha -> mean CV AUROC
+                    }
 
-    return test_results, train_results
+    return test_results, train_results, cv_info
 
 
 def measure_auroc_vs_training_size_mlp(
@@ -1617,8 +1693,12 @@ def measure_auroc_vs_training_size_mlp(
         random_state: Base random seed
 
     Returns:
-        Dictionary mapping training sizes to lists of error rates (1 - AUROC)
+        Tuple of (test_results, train_results):
+            test_results: Dictionary mapping training sizes to lists of test error rates (1 - AUROC)
+            train_results: Dictionary mapping training sizes to lists of train error rates (1 - AUROC)
     """
+    from sklearn.metrics import roc_auc_score
+    
     if n_values is None:
         high = min(int(np.floor(np.log2(len(activations)))) - 1, config.MAX_HIGH)
         n_values = [2**i for i in range(4, high+1)]
@@ -1628,7 +1708,8 @@ def measure_auroc_vs_training_size_mlp(
         n_values = list(set(n_values))
         n_values.sort()
 
-    results = {n: [] for n in n_values}
+    test_results = {n: [] for n in n_values}
+    train_results = {n: [] for n in n_values}
     
     mlp_type = "Constant Residual" if use_constant_residual else "Residual"
     print(f"Using {mlp_type} MLP with architecture: {hidden_layer_sizes}")
@@ -1647,7 +1728,7 @@ def measure_auroc_vs_training_size_mlp(
 
             # Need both classes in training set
             if len(X_test) > 0 and len(np.unique(y_train)) > 1:
-                auroc, _, _, _, _ = train_mlp_probe(
+                auroc_test, clf, _, _, _ = train_mlp_probe(
                     X_train, y_train, X_test, y_test,
                     hidden_layer_sizes=hidden_layer_sizes,
                     max_iter=max_iter,
@@ -1659,11 +1740,16 @@ def measure_auroc_vs_training_size_mlp(
                     use_constant_residual=use_constant_residual,
                     random_state=random_state
                 )
-                results[n].append(1 - auroc)  # Store error rate
+                test_results[n].append(1 - auroc_test)  # Store test error rate
+                
+                # Also compute train AUROC
+                y_train_pred_proba = clf.predict_proba(X_train)[:, 1]
+                auroc_train = roc_auc_score(y_train, y_train_pred_proba)
+                train_results[n].append(1 - auroc_train)  # Store train error rate
             
-            print(f"  Trial {trial+1}/{n_trials}: AUROC = {auroc:.4f}" if 'auroc' in locals() else f"  Trial {trial+1}/{n_trials}: Skipped")
+            print(f"  Trial {trial+1}/{n_trials}: Test AUROC = {auroc_test:.4f}, Train AUROC = {auroc_train:.4f}" if 'auroc_test' in locals() else f"  Trial {trial+1}/{n_trials}: Skipped")
 
-    return results
+    return test_results, train_results
 
 
 def measure_label_corruption_robustness(

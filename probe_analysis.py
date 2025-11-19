@@ -325,7 +325,7 @@ def run_probe_analysis(
         print(f"Experiment 5: AUROC vs Training Set Size (Linear Probe)")
         print(f"{'=' * 60}")
 
-        results_linear, train_results_linear = measure_auroc_vs_training_size(
+        results_linear, train_results_linear, cv_info_linear = measure_auroc_vs_training_size(
             activations, labels,
             n_values=None,
             n_trials=config.LINEAR_AUROC_VS_N_NUM_TRIALS,
@@ -349,6 +349,40 @@ def run_probe_analysis(
             title="Linear Probe Error vs Training Set Size",
             train_results=train_results_linear
         )
+        
+        # Save summary data
+        import json
+        summary_data = {
+            'metadata': {
+                'prompt_name': prompt_name,
+                'layer': layer,
+                'position': token_position,
+                'num_examples': num_examples,
+                'filter_reliable': filter_reliable,
+                'n_trials': config.LINEAR_AUROC_VS_N_NUM_TRIALS,
+                'probe_mode': config.LINEAR_PROBE_MODE,
+                'ridge_alpha_cv_enabled': config.RIDGE_ALPHA_CV_ENABLED if hasattr(config, 'RIDGE_ALPHA_CV_ENABLED') else False,
+                'ridge_alpha_cv_folds': config.RIDGE_ALPHA_CV_FOLDS if hasattr(config, 'RIDGE_ALPHA_CV_FOLDS') else None,
+                'ridge_alpha_cv_alphas': config.RIDGE_ALPHA_CV_ALPHAS if hasattr(config, 'RIDGE_ALPHA_CV_ALPHAS') else None,
+            },
+            'test_results': {str(k): v for k, v in results_linear.items()},
+            'train_results': {str(k): v for k, v in train_results_linear.items()},
+            'cv_info': {}
+        }
+        
+        # Add CV information if available
+        if cv_info_linear:
+            for (n, trial), cv_data in cv_info_linear.items():
+                key = f"n{n}_trial{trial}"
+                summary_data['cv_info'][key] = {
+                    'best_alpha': float(cv_data['best_alpha']),
+                    'cv_results': {str(float(alpha)): float(auroc) for alpha, auroc in cv_data['cv_results'].items()}
+                }
+        
+        summary_path = os.path.join(results_dir, f"auroc_vs_n_{fname}_summary.json")
+        with open(summary_path, 'w') as f:
+            json.dump(summary_data, f, indent=2)
+        print(f"  ✓ Summary saved to {summary_path}")
 
     # Experiment 5b: AUROC vs Training Set Size (MLP Probe)
     results_mlp = None
@@ -357,7 +391,7 @@ def run_probe_analysis(
         print(f"Experiment 5b: AUROC vs Training Set Size (MLP Probe)")
         print(f"{'=' * 60}")
 
-        results_mlp = measure_auroc_vs_training_size_mlp(
+        results_mlp, train_results_mlp = measure_auroc_vs_training_size_mlp(
             activations, labels,
             n_values=None,
             n_trials=config.MLP_AUROC_VS_N_NUM_TRIALS,
@@ -372,15 +406,49 @@ def run_probe_analysis(
             random_state=config.PROBE_RANDOM_STATE
         )
 
+        print("\n  Test Set Performance:")
         for n, errors in results_mlp.items():
             if errors:
-                print(f"  N={n}: Error = {np.mean(errors):.4f} ± {np.std(errors):.4f}")
+                print(f"    N={n}: Error = {np.mean(errors):.4f} ± {np.std(errors):.4f}")
+        
+        print("\n  Train Set Performance:")
+        for n, errors in train_results_mlp.items():
+            if errors:
+                print(f"    N={n}: Error = {np.mean(errors):.4f} ± {np.std(errors):.4f}")
 
         plot_auroc_vs_training_size(
             results_mlp,
             os.path.join(results_dir, f"auroc_vs_n_mlp_{fname}.png"),
-            title="MLP Probe Error vs Training Set Size"
+            title="MLP Probe Error vs Training Set Size",
+            train_results=train_results_mlp
         )
+        
+        # Save summary data
+        import json
+        summary_data = {
+            'metadata': {
+                'prompt_name': prompt_name,
+                'layer': layer,
+                'position': token_position,
+                'num_examples': num_examples,
+                'filter_reliable': filter_reliable,
+                'n_trials': config.MLP_AUROC_VS_N_NUM_TRIALS,
+                'hidden_layer_sizes': config.MLP_HIDDEN_LAYER_SIZES,
+                'learning_rate': config.MLP_LEARNING_RATE,
+                'weight_decay': config.MLP_WEIGHT_DECAY,
+                'dropout': config.MLP_DROPOUT,
+                'patience': config.MLP_PATIENCE,
+                'lr_scheduler': config.MLP_LR_SCHEDULER,
+                'use_constant_residual': config.MLP_USE_CONSTANT_RESIDUAL,
+            },
+            'test_results': {str(k): v for k, v in results_mlp.items()},
+            'train_results': {str(k): v for k, v in train_results_mlp.items()}
+        }
+        
+        summary_path = os.path.join(results_dir, f"auroc_vs_n_mlp_{fname}_summary.json")
+        with open(summary_path, 'w') as f:
+            json.dump(summary_data, f, indent=2)
+        print(f"  ✓ Summary saved to {summary_path}")
     
     # Combined plot (if both experiments were run)
     if results_linear is not None and results_mlp is not None:
